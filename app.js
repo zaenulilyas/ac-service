@@ -8,7 +8,12 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v35'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v37'; // dinaikin tiap update biar keliatan di Pengaturan
+// Akun login (client-side / soft-gate). Tambah teknisi di sini.
+const USERS = [
+  { user: 'admin', pass: 'admin123', name: 'Admin' },
+  { user: 'teknisi', pass: 'teknisi123', name: 'Teknisi' }
+];
 const REMIND_DAYS = 7; // jatuh tempo re-maintenance: 7 hari setelah servis
 // Merk AC yang umum di pasaran Indonesia (+ "Lainnya" untuk ketik manual)
 const MERK_OPTIONS = ['Panasonic', 'Daikin', 'LG', 'Sharp', 'Samsung', 'Gree', 'Midea', 'Polytron',
@@ -88,6 +93,7 @@ function idbClear(store) {
 const state = {
   settings: { endpoint: '', project: 'Service Check AC' },
   units: [],
+  user: '',          // nama teknisi yang login
   currentSite: '',   // lokasi (site) yang dipilih
   current: null,     // unit sedang diedit di wizard
   step: 0,
@@ -215,9 +221,10 @@ function unitProgress(u) {
 }
 
 /* ----------------------------- Router ---------------------------------- */
-const VIEWS = ['home', 'sites', 'list', 'wizard', 'settings'];
+const VIEWS = ['login', 'home', 'sites', 'list', 'wizard', 'settings'];
 function show(view, opts = {}) {
   VIEWS.forEach(v => $('#view-' + v).classList.toggle('hidden', v !== view));
+  const bar = $('#topbar'); if (bar) bar.classList.toggle('hidden', view === 'login');
   const setBtn = $('#settingsBtn');
   const titles = { home: ['AC Service', 'Maintenance & Instalasi'], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
   $('#viewTitle').textContent = opts.title != null ? opts.title : titles[view][0];
@@ -248,6 +255,26 @@ async function renderHome() {
     if (due) { if (!b) { b = document.createElement('span'); b.className = 'badge-due'; tile.appendChild(b); } b.textContent = `🔔 ${due}`; }
     else if (b) b.remove();
   }
+}
+
+/* ------------------------------ Auth ----------------------------------- */
+function doLogin() {
+  const u = ($('#loginUser').value || '').trim().toLowerCase();
+  const p = $('#loginPass').value || '';
+  const match = USERS.find(x => x.user.toLowerCase() === u && x.pass === p);
+  const err = $('#loginErr');
+  if (!match) { if (err) err.style.display = 'block'; return; }
+  if (err) err.style.display = 'none';
+  state.user = match.name;
+  try { localStorage.setItem('acAuth', match.name); } catch (e) {}
+  $('#loginPass').value = '';
+  show('home'); renderHome();
+}
+function doLogout() {
+  if (!confirm('Keluar dari akun?')) return;
+  state.user = '';
+  try { localStorage.removeItem('acAuth'); } catch (e) {}
+  show('login');
 }
 
 /* ----------------------------- Update ---------------------------------- */
@@ -450,7 +477,7 @@ function renderStep(i) {
     case 5: return h2('✅ Penilaian') + `
       <div class="card">
         <div class="field"><label>Status</label>${selectHTML('f_status', STATUS_OPTIONS, u.status)}</div>
-        <div class="field"><label>Teknisi (yang mengerjakan)</label><input id="f_teknisi1" value="${esc(u.teknisi1)}" placeholder="Nama teknisi"></div>
+        <div class="field"><label>Teknisi (yang mengerjakan)</label><input id="f_teknisi1" value="${esc(u.teknisi1 || state.user)}" placeholder="Nama teknisi"></div>
         <div class="field"><label>Catatan</label><textarea id="f_catatan" placeholder="Temuan, saran, part yang perlu diganti…">${esc(u.catatan)}</textarea></div>
       </div>`;
     case 6: return h2('📄 Ringkasan') + summaryHTML();
@@ -714,6 +741,7 @@ async function renderSettings() {
   $('#setEndpoint').value = state.settings.endpoint || '';
   $('#setProject').value = state.settings.project || '';
   const ver = $('#appVer'); if (ver) ver.textContent = APP_VERSION;
+  const cu = $('#curUser'); if (cu) cu.textContent = state.user || '—';
   const photos = await idbAll('photos');
   $('#statUnits').textContent = state.units.length;
   $('#statUnsynced').textContent = state.units.filter(u => !u.synced && (u.lokasi || u.merk)).length;
@@ -751,6 +779,9 @@ function wire() {
   on('#wipeBtn', 'onclick', wipeAll);
   on('#notifBtn', 'onclick', enableNotif);
   on('#updateBtn', 'onclick', forceUpdate);
+  on('#loginBtn', 'onclick', doLogin);
+  on('#logoutBtn', 'onclick', doLogout);
+  const lp = $('#loginPass'); if (lp) lp.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
 }
 
 /* ------------------------------ Boot ----------------------------------- */
@@ -765,7 +796,9 @@ async function boot() {
     if (u.synced && !isMaintained(u)) { u.synced = false; await idbPut('units', u); }
   }
   wire();
-  show('home'); renderHome();
+  try { state.user = localStorage.getItem('acAuth') || ''; } catch (e) { state.user = ''; }
+  if (state.user) { show('home'); renderHome(); }
+  else { show('login'); }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
