@@ -36,6 +36,7 @@
 
     <!-- HOME -->
     <section id="view-home" class="view hidden">
+      <div id="ticketBox"></div>
       <div class="menu">
         <div class="tile" data-go="maintenance">
           <div class="ic">🧰</div>
@@ -50,6 +51,25 @@
         </div>
       </div>
       <p class="note" style="text-align:center;margin-top:22px" id="homeStat"></p>
+    </section>
+
+    <!-- ADMIN PANEL -->
+    <section id="view-admin" class="view hidden">
+      <div class="card">
+        <div class="sec-label" style="margin-top:0">➕ Tambah Akun Teknisi</div>
+        <div class="grid2">
+          <div class="field"><label>Username</label><input id="nuUser" autocomplete="off" placeholder="mis. budi"></div>
+          <div class="field"><label>Nama</label><input id="nuName" placeholder="mis. Budi S"></div>
+        </div>
+        <div class="field"><label>Password</label><input id="nuPass" placeholder="password"></div>
+        <button class="btn" id="addUserBtn">Buat Akun</button>
+      </div>
+      <div class="card">
+        <div class="sec-label" style="margin-top:0">📋 Review Hasil Kerja</div>
+        <button class="btn ghost sm" id="loadRecordsBtn">🔄 Muat Data Terupload</button>
+        <div id="recordList" class="list" style="margin-top:12px"></div>
+      </div>
+      <button class="btn ghost sm" id="adminLogoutBtn" style="max-width:200px;margin:0 auto;display:block">🚪 Logout</button>
     </section>
 
     <!-- SITE PICKER -->

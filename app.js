@@ -8,11 +8,10 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v38'; // dinaikin tiap update biar keliatan di Pengaturan
-// Akun login (client-side / soft-gate). Tambah teknisi di sini.
+const APP_VERSION = 'v39'; // dinaikin tiap update biar keliatan di Pengaturan
+// Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
-  { user: 'admin', pass: 'admin123', name: 'Admin' },
-  { user: 'teknisi', pass: 'teknisi123', name: 'Teknisi' }
+  { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
 ];
 const REMIND_DAYS = 7; // jatuh tempo re-maintenance: 7 hari setelah servis
 // Merk AC yang umum di pasaran Indonesia (+ "Lainnya" untuk ketik manual)
@@ -94,6 +93,7 @@ const state = {
   settings: { endpoint: '', project: 'Service Check AC' },
   units: [],
   user: '',          // nama teknisi yang login
+  role: '',          // 'admin' | 'teknisi'
   currentSite: '',   // lokasi (site) yang dipilih
   current: null,     // unit sedang diedit di wizard
   step: 0,
@@ -221,18 +221,19 @@ function unitProgress(u) {
 }
 
 /* ----------------------------- Router ---------------------------------- */
-const VIEWS = ['login', 'home', 'sites', 'list', 'wizard', 'settings'];
+const VIEWS = ['login', 'home', 'admin', 'sites', 'list', 'wizard', 'settings'];
 function show(view, opts = {}) {
   VIEWS.forEach(v => $('#view-' + v).classList.toggle('hidden', v !== view));
   const bar = $('#topbar'); if (bar) bar.classList.toggle('hidden', view === 'login');
   const setBtn = $('#settingsBtn');
-  const titles = { login: ['AC Service', ''], home: ['AC Service', 'Maintenance & Instalasi'], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
+  const titles = { login: ['AC Service', ''], home: ['AC Service', 'Maintenance & Instalasi'], admin: ['Panel Admin', ''], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
   const ttl = titles[view] || ['', ''];
   $('#viewTitle').textContent = opts.title != null ? opts.title : ttl[0];
   $('#viewSub').textContent = opts.sub != null ? opts.sub : ttl[1];
-  if (setBtn) setBtn.classList.toggle('hidden', view === 'settings' || view === 'wizard');
-  const back = $('#backBtn'); if (back) back.classList.toggle('hidden', view === 'home' || view === 'wizard');
-  const tw = $('#titleWrap'); if (tw) tw.style.cursor = view === 'home' ? 'default' : 'pointer';
+  if (setBtn) setBtn.classList.toggle('hidden', view === 'settings' || view === 'wizard' || view === 'login');
+  const canBack = view === 'sites' || view === 'list' || view === 'settings';
+  const back = $('#backBtn'); if (back) back.classList.toggle('hidden', !canBack);
+  const tw = $('#titleWrap'); if (tw) tw.style.cursor = canBack ? 'pointer' : 'default';
   state.view = view;
   window.scrollTo(0, 0);
 }
@@ -240,7 +241,7 @@ function show(view, opts = {}) {
 function goBack() {
   if (state.view === 'wizard') { show('list', { title: 'Daftar Ruangan', sub: '' }); renderList($('#searchInput').value); }
   else if (state.view === 'list') { show('sites'); renderSites(); }
-  else if (state.view === 'settings') { show('home'); renderHome(); }
+  else if (state.view === 'settings') { if (state.role === 'admin') { show('admin'); renderAdmin(); } else { show('home'); renderHome(); } }
   else { show('home'); renderHome(); }
 }
 
@@ -256,26 +257,124 @@ async function renderHome() {
     if (due) { if (!b) { b = document.createElement('span'); b.className = 'badge-due'; tile.appendChild(b); } b.textContent = `🔔 ${due}`; }
     else if (b) b.remove();
   }
+  loadTickets();
 }
 
 /* ------------------------------ Auth ----------------------------------- */
-function doLogin() {
-  const u = ($('#loginUser').value || '').trim().toLowerCase();
+async function doLogin() {
+  const u = ($('#loginUser').value || '').trim();
   const p = $('#loginPass').value || '';
-  const match = USERS.find(x => x.user.toLowerCase() === u && x.pass === p);
-  const err = $('#loginErr');
-  if (!match) { if (err) err.style.display = 'block'; return; }
+  const err = $('#loginErr'); const btn = $('#loginBtn');
   if (err) err.style.display = 'none';
-  state.user = match.name;
-  try { localStorage.setItem('acAuth', match.name); } catch (e) {}
-  $('#loginPass').value = '';
-  show('home'); renderHome();
+  if (btn) { btn.disabled = true; btn.textContent = 'Masuk…'; }
+  let auth = null;
+  if (state.settings.endpoint) {
+    try {
+      const res = await fetch(state.settings.endpoint, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'login', user: u, pass: p }) });
+      const out = await res.json().catch(() => ({}));
+      if (out.ok) auth = { name: out.name, role: out.role };
+    } catch (e) {}
+  }
+  if (!auth) { const m = USERS.find(x => x.user.toLowerCase() === u.toLowerCase() && x.pass === p); if (m) auth = { name: m.name, role: m.role }; }
+  if (btn) { btn.disabled = false; btn.textContent = 'Masuk'; }
+  if (!auth) { if (err) err.style.display = 'block'; return; }
+  setAuth(auth); $('#loginPass').value = '';
+  enterApp();
+}
+function setAuth(a) {
+  state.user = a.name; state.role = a.role || 'teknisi';
+  try { localStorage.setItem('acAuth', JSON.stringify(a)); } catch (e) {}
+}
+function enterApp() {
+  if (state.role === 'admin') { show('admin'); renderAdmin(); }
+  else { show('home'); renderHome(); }
 }
 function doLogout() {
   if (!confirm('Keluar dari akun?')) return;
-  state.user = '';
+  state.user = ''; state.role = '';
   try { localStorage.removeItem('acAuth'); } catch (e) {}
   show('login');
+}
+
+/* ------------------------------ Admin ---------------------------------- */
+async function apiPost(payload) {
+  if (!state.settings.endpoint) throw new Error('Endpoint belum diset (⚙️)');
+  const res = await fetch(state.settings.endpoint, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+  const out = await res.json().catch(() => ({}));
+  if (!out.ok) throw new Error(out.error || 'gagal');
+  return out;
+}
+
+function renderAdmin() { /* form kosong; daftar dimuat saat tombol ditekan */ }
+
+async function addNewUser() {
+  const user = ($('#nuUser').value || '').trim();
+  const name = ($('#nuName').value || '').trim();
+  const pass = ($('#nuPass').value || '').trim();
+  if (!user || !name || !pass) { toast('Lengkapi username, nama, password', 'bad'); return; }
+  const btn = $('#addUserBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
+  try {
+    await apiPost({ action: 'addUser', user, name, pass });
+    toast('Akun teknisi dibuat ✓', 'ok');
+    $('#nuUser').value = ''; $('#nuName').value = ''; $('#nuPass').value = '';
+  } catch (e) { toast('Gagal: ' + e.message, 'bad'); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Buat Akun'; }
+}
+
+async function loadRecords() {
+  const box = $('#recordList'); const btn = $('#loadRecordsBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Memuat…'; }
+  try {
+    const out = await apiPost({ action: 'records' });
+    const recs = out.records || [];
+    box.innerHTML = recs.length ? '' : '<p class="note">Belum ada data terupload.</p>';
+    recs.forEach(r => {
+      const el = document.createElement('div');
+      el.className = 'unit';
+      el.innerHTML = `<div class="no">${esc(String(r.no || '-'))}</div>
+        <div class="info"><h3>${esc(r.ruangan)}</h3>
+        <p>${esc(r.lokasi)} · ${esc(r.merk || '—')} · ${esc(String(r.status || ''))} · ${esc(r.teknisi || '—')}</p></div>
+        <span class="pill prog">Revisi?</span>`;
+      el.onclick = () => markRevisi(r);
+      box.appendChild(el);
+    });
+  } catch (e) { box.innerHTML = '<p class="note" style="color:#f9a3a3">Gagal muat: ' + esc(e.message) + '</p>'; }
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 Muat Data Terupload'; }
+}
+
+async function markRevisi(r) {
+  const note = prompt('Catatan revisi untuk "' + r.ruangan + '" (' + r.lokasi + '):', '');
+  if (note === null) return;
+  try {
+    await apiPost({ action: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note });
+    toast('Tiket revisi dikirim ke teknisi ✓', 'ok');
+  } catch (e) { toast('Gagal: ' + e.message, 'bad'); }
+}
+
+/* Tiket revisi di sisi teknisi (tampil di home) */
+async function loadTickets() {
+  const box = $('#ticketBox'); if (!box) return;
+  box.innerHTML = '';
+  if (!state.settings.endpoint || state.role === 'admin') return;
+  try {
+    const out = await apiPost({ action: 'tickets', teknisi: state.user });
+    const tk = out.tickets || [];
+    if (!tk.length) return;
+    box.innerHTML = `<div class="banner" style="cursor:default">🎫 ${tk.length} tiket revisi — tap buat kerjain ulang</div>`;
+    tk.forEach(t => {
+      const el = document.createElement('div');
+      el.className = 'unit'; el.style.marginBottom = '10px';
+      el.innerHTML = `<div class="no">🎫</div><div class="info"><h3>${esc(t.ruangan)}</h3>
+        <p>${esc(t.lokasi)}${t.catatan ? ' · ' + esc(t.catatan) : ''}</p></div><span class="pill due">Revisi</span>`;
+      el.onclick = () => openTicket(t);
+      box.appendChild(el);
+    });
+  } catch (e) { /* diamkan; offline */ }
+}
+function openTicket(t) {
+  const u = state.units.find(x => x.lokasi === t.lokasi && x.ruangan === t.ruangan);
+  if (u) { state.currentSite = t.lokasi; openWizard(u.id); }
+  else toast('Ruangan ' + t.ruangan + ' belum ada di HP ini', 'bad');
 }
 
 /* ----------------------------- Update ---------------------------------- */
@@ -761,7 +860,7 @@ async function wipeAll() {
 function on(sel, evt, fn) { const el = $(sel); if (el) el[evt] = fn; }
 function wire() {
   on('#backBtn', 'onclick', goBack);
-  on('#titleWrap', 'onclick', () => { if (state.view !== 'home') goBack(); });
+  on('#titleWrap', 'onclick', () => { if (['sites', 'list', 'settings'].includes(state.view)) goBack(); });
   on('#settingsBtn', 'onclick', () => { show('settings'); renderSettings(); });
 
   $$('.tile').forEach(t => t.onclick = () => {
@@ -782,6 +881,9 @@ function wire() {
   on('#updateBtn', 'onclick', forceUpdate);
   on('#loginBtn', 'onclick', doLogin);
   on('#logoutBtn', 'onclick', doLogout);
+  on('#adminLogoutBtn', 'onclick', doLogout);
+  on('#addUserBtn', 'onclick', addNewUser);
+  on('#loadRecordsBtn', 'onclick', loadRecords);
   const lp = $('#loginPass'); if (lp) lp.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
 }
 
@@ -797,8 +899,9 @@ async function boot() {
     if (u.synced && !isMaintained(u)) { u.synced = false; await idbPut('units', u); }
   }
   wire();
-  try { state.user = localStorage.getItem('acAuth') || ''; } catch (e) { state.user = ''; }
-  if (state.user) { show('home'); renderHome(); }
+  let saved = null;
+  try { const raw = localStorage.getItem('acAuth'); if (raw) saved = JSON.parse(raw); } catch (e) { saved = null; }
+  if (saved && saved.name) { state.user = saved.name; state.role = saved.role || 'teknisi'; enterApp(); }
   else { show('login'); }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
