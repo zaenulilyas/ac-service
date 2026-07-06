@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>AC Service — Sukaregang</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <button id="backBtn" class="back hidden">‹ Kembali</button>
+      <div id="titleWrap">
+        <h1 id="viewTitle">AC Service</h1>
+        <small id="viewSub">Maintenance &amp; Instalasi</small>
+      </div>
+      <button class="back" id="settingsBtn" style="margin-left:auto">⚙️</button>
+    </header>
+
+    <!-- HOME -->
+    <section id="view-home" class="view">
+      <div class="menu">
+        <div class="tile" data-go="maintenance">
+          <div class="ic">🧰</div>
+          <h2>MAINTENANCE</h2>
+          <p>Servis berkala AC split — panduan foto before/after, ukur & cleaning.</p>
+        </div>
+        <div class="tile soon" data-go="instalasi">
+          <span class="badge-soon">SOON</span>
+          <div class="ic">🔧</div>
+          <h2>INSTALASI</h2>
+          <p>Pemasangan unit baru. Segera hadir.</p>
+        </div>
+      </div>
+      <p class="note" style="text-align:center;margin-top:22px" id="homeStat"></p>
+    </section>
+
+    <!-- SITE PICKER -->
+    <section id="view-sites" class="view hidden">
+      <p class="note" style="margin:0 0 12px">Pilih lokasi:</p>
+      <div id="siteList" class="list"></div>
+    </section>
+
+    <!-- UNIT LIST -->
+    <section id="view-list" class="view hidden">
+      <div class="toolbar">
+        <input class="search" id="searchInput" list="searchSuggest" autocomplete="off" placeholder="🔍 Cari ruangan…" />
+        <datalist id="searchSuggest"></datalist>
+        <button class="btn ghost sm" id="syncAllBtn">⤒ Upload</button>
+      </div>
+      <div id="dueBanner" class="banner hidden"></div>
+      <div id="unitList" class="list"></div>
+      <div id="listEmpty" class="empty hidden">
+        <span class="ic">📋</span>
+        Belum ada unit. Tap tombol + buat nambah.
+      </div>
+      <button class="fab" id="addUnitBtn" title="Tambah unit">＋</button>
+    </section>
+
+    <!-- WIZARD -->
+    <section id="view-wizard" class="view hidden"></section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view hidden">
+      <div class="card">
+        <div class="field">
+          <label>URL Google Apps Script (Web App)</label>
+          <input id="setEndpoint" placeholder="https://script.google.com/macros/s/…/exec" />
+          <p class="note">Tempel URL deploy Apps Script. Kosongkan kalau mau offline dulu (data tetap tersimpan di HP).</p>
+        </div>
+        <div class="field">
+          <label>Nama proyek / lokasi</label>
+          <input id="setProject" placeholder="Service Check AC Sukaregang" />
+        </div>
+        <button class="btn" id="saveSettingsBtn">Simpan Pengaturan</button>
+      </div>
+      <div class="card">
+        <div class="sec-label" style="margin-top:0">Data</div>
+        <div class="kv"><span>Total unit tersimpan</span><span id="statUnits">0</span></div>
+        <div class="kv"><span>Belum ter-sync</span><span id="statUnsynced">0</span></div>
+        <div class="kv"><span>Total foto</span><span id="statPhotos">0</span></div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn ghost sm" id="testConnBtn">Tes Koneksi</button>
+          <button class="btn danger sm" id="wipeBtn">Hapus Semua</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-label" style="margin-top:0">Notifikasi</div>
+        <p class="note" style="margin-top:0">Reminder jatuh tempo (7 hari) muncul di dalam app tiap dibuka. Aktifkan notifikasi HP biar dapat pop-up juga.</p>
+        <button class="btn ghost sm" id="notifBtn">🔔 Aktifkan Notifikasi HP</button>
+      </div>
+      <div class="card">
+        <div class="sec-label" style="margin-top:0">Aplikasi</div>
+        <div class="kv"><span>Versi terpasang</span><span id="appVer">—</span></div>
+        <button class="btn ghost sm" id="updateBtn" style="margin-top:12px">🔄 Cek Update Versi Terbaru</button>
+        <p class="note">Ambil versi terbaru dari server & muat ulang (butuh internet).</p>
+      </div>
+      <p class="note" style="text-align:center">offline-first PWA · data di HP + Google Sheets</p>
+    </section>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

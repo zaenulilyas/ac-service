@@ -1,0 +1,160 @@
+:root{
+  --bg:#0b1220; --bg2:#111c30; --card:#152238; --card2:#1b2b45;
+  --line:#24344f; --txt:#e8eefc; --mut:#8ea0c0; --mut2:#63769a;
+  --acc:#3b82f6; --acc2:#2563eb; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+  --radius:16px; --shadow:0 8px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:linear-gradient(180deg,#0b1220,#0d1526 40%,#0b1220);
+  color:var(--txt);min-height:100vh;line-height:1.45;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.app{max-width:640px;margin:0 auto;padding:16px;min-height:100vh}
+header.top{
+  display:flex;align-items:center;gap:12px;margin-bottom:18px;
+}
+header.top .logo{font-size:28px}
+header.top h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+header.top small{color:var(--mut);font-weight:400}
+.back{background:var(--card);border:1px solid var(--line);color:var(--txt);
+  padding:8px 12px;border-radius:12px;font-size:14px;cursor:pointer;display:inline-flex;
+  align-items:center;gap:6px}
+.hidden{display:none!important}
+
+/* Home menu */
+.menu{display:grid;gap:14px;margin-top:8px}
+.menu .tile{
+  position:relative;border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px 20px;background:linear-gradient(135deg,var(--card),var(--card2));
+  box-shadow:var(--shadow);cursor:pointer;overflow:hidden;transition:.15s transform;
+}
+.menu .tile:active{transform:scale(.98)}
+.menu .tile h2{margin:0 0 4px;font-size:20px}
+.menu .tile p{margin:0;color:var(--mut);font-size:14px}
+.menu .tile .ic{font-size:34px;margin-bottom:10px}
+.menu .tile.soon{opacity:.55}
+.badge-soon{position:absolute;top:12px;right:12px;background:var(--warn);color:#1a1200;
+  font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  border:none;border-radius:12px;padding:13px 16px;font-size:15px;font-weight:600;
+  cursor:pointer;background:var(--acc);color:#fff;width:100%}
+.btn{transition:transform .08s ease, background .15s ease, opacity .15s}
+.btn:active{background:var(--acc2);transform:scale(.95)}
+.btn.ghost{background:var(--card);border:1px solid var(--line);color:var(--txt)}
+.btn.sm{width:auto;padding:9px 13px;font-size:13px}
+.btn.danger{background:var(--bad)}
+.btn.ok{background:var(--ok)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+
+/* Toolbar */
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.toolbar .search{flex:1;min-width:140px}
+input,select,textarea{
+  width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--txt);
+  border-radius:12px;padding:12px;font-size:15px;font-family:inherit;outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+textarea{resize:vertical;min-height:70px}
+label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
+.field{margin-bottom:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Unit cards */
+.list{display:grid;gap:12px}
+.unit{
+  border:1px solid var(--line);border-radius:var(--radius);padding:14px;
+  background:var(--card);display:flex;gap:12px;align-items:center;cursor:pointer}
+.unit:active{background:var(--card2)}
+.unit .no{width:38px;height:38px;border-radius:10px;background:var(--bg2);
+  display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--mut)}
+.unit .info{flex:1;min-width:0}
+.unit .info h3{margin:0;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.unit .info p{margin:2px 0 0;font-size:13px;color:var(--mut)}
+.pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.pill.done{background:rgba(34,197,94,.15);color:#7ee2a4}
+.pill.prog{background:rgba(245,158,11,.15);color:#facc7a}
+.pill.todo{background:rgba(142,160,192,.15);color:var(--mut)}
+.pill.synced{background:rgba(59,130,246,.15);color:#8fb8fb}
+.pill.due{background:rgba(239,68,68,.18);color:#f9a3a3}
+.pill.uploading{background:rgba(59,130,246,.18);color:#8fb8fb}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.25);
+  border-top-color:#8fb8fb;border-radius:50%;animation:spin .7s linear infinite;
+  vertical-align:-2px;margin-right:5px}
+.spin.big{width:30px;height:30px;border-width:3px;margin:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.banner{background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.4);color:#f9b9b9;
+  padding:11px 14px;border-radius:12px;font-size:14px;font-weight:600;margin-bottom:12px}
+.tile .badge-due{position:absolute;top:12px;right:12px;background:var(--bad);color:#fff;
+  font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+/* Stepper wizard */
+.steps{display:flex;gap:6px;margin-bottom:16px}
+.steps .s{flex:1;height:6px;border-radius:6px;background:var(--line)}
+.steps .s.active{background:var(--acc)}
+.steps .s.done{background:var(--ok)}
+.step-title{font-size:13px;color:var(--mut);margin-bottom:2px}
+.step h2{margin:0 0 14px;font-size:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;margin-bottom:14px}
+
+/* Photo capture */
+.photo-slot{margin-bottom:14px}
+.photo-slot .cap{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.photo-slot .cap b{font-size:14px}
+.photo-box{
+  border:2px dashed var(--line);border-radius:14px;aspect-ratio:4/3;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;background:var(--bg2);
+  position:relative;cursor:pointer;color:var(--mut2);text-align:center;font-size:13px}
+.photo-box img{width:100%;height:100%;object-fit:cover}
+.photo-box .ic{font-size:30px;display:block;margin-bottom:6px}
+.photo-box .retake{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);
+  color:#fff;border-radius:20px;padding:5px 10px;font-size:12px}
+.ba-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+.tag.before{background:rgba(239,68,68,.15);color:#f7a1a1}
+.tag.after{background:rgba(34,197,94,.15);color:#8ee6ab}
+
+/* Nav buttons — selalu nempel di bawah layar di semua step */
+.wizard-nav{display:flex;gap:10px;position:fixed;left:0;right:0;bottom:0;z-index:30;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg,rgba(11,18,32,0) 0%,var(--bg) 40%);
+  max-width:640px;margin:0 auto}
+.wizard-nav>*{flex:1}
+/* Ruang di bawah konten wizard biar nggak ketutup nav-bar fixed */
+#view-wizard{padding-bottom:110px}
+
+/* Toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+  background:#0f1a2e;border:1px solid var(--line);color:var(--txt);padding:12px 18px;
+  border-radius:12px;box-shadow:var(--shadow);font-size:14px;z-index:99;max-width:90%}
+.toast.ok{border-color:var(--ok)} .toast.bad{border-color:var(--bad)}
+
+/* Settings + misc */
+.note{font-size:12px;color:var(--mut2);margin-top:6px}
+.empty{text-align:center;color:var(--mut);padding:40px 10px}
+.empty .ic{font-size:40px;display:block;margin-bottom:10px}
+.sec-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut2);
+  margin:18px 0 8px}
+.kv{display:flex;justify-content:space-between;font-size:14px;padding:7px 0;border-bottom:1px solid var(--line)}
+.kv span:first-child{color:var(--mut)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--bg2);
+  border:1px solid var(--line);border-radius:20px;padding:5px 10px;color:var(--mut)}
+.fab{position:fixed;right:18px;bottom:20px;width:56px;height:56px;border-radius:50%;
+  background:var(--acc);color:#fff;font-size:28px;border:none;box-shadow:var(--shadow);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:20;
+  transition:transform .1s ease}
+.fab:active{transform:scale(.88)}
+
+/* Efek tekan (scale) untuk semua elemen yang bisa di-tap */
+.back,.unit,.tile,.photo-box,select,input[type=file]{transition:transform .08s ease, background .15s ease}
+.back:active{transform:scale(.94)}
+.unit:active{transform:scale(.98)}
+.photo-box:active{transform:scale(.97)}
+.pill,.chip{transition:transform .08s ease}
