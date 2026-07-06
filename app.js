@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v37'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v38'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun login (client-side / soft-gate). Tambah teknisi di sini.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin' },
@@ -226,9 +226,10 @@ function show(view, opts = {}) {
   VIEWS.forEach(v => $('#view-' + v).classList.toggle('hidden', v !== view));
   const bar = $('#topbar'); if (bar) bar.classList.toggle('hidden', view === 'login');
   const setBtn = $('#settingsBtn');
-  const titles = { home: ['AC Service', 'Maintenance & Instalasi'], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
-  $('#viewTitle').textContent = opts.title != null ? opts.title : titles[view][0];
-  $('#viewSub').textContent = opts.sub != null ? opts.sub : titles[view][1];
+  const titles = { login: ['AC Service', ''], home: ['AC Service', 'Maintenance & Instalasi'], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
+  const ttl = titles[view] || ['', ''];
+  $('#viewTitle').textContent = opts.title != null ? opts.title : ttl[0];
+  $('#viewSub').textContent = opts.sub != null ? opts.sub : ttl[1];
   if (setBtn) setBtn.classList.toggle('hidden', view === 'settings' || view === 'wizard');
   const back = $('#backBtn'); if (back) back.classList.toggle('hidden', view === 'home' || view === 'wizard');
   const tw = $('#titleWrap'); if (tw) tw.style.cursor = view === 'home' ? 'default' : 'pointer';
