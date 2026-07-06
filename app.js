@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v39'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v40'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -88,9 +88,12 @@ function idbClear(store) {
   return new Promise((res, rej) => { const r = tx(store, 'readwrite').clear(); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
 }
 
+// Endpoint Apps Script default (biar semua HP langsung nyambung tanpa setting manual)
+const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxl-A8O2z-vtYVfKOFsz2sxVKSeyhw-FYcRVqfpv6iZsZeK9tZ5FcDwYwVjndQMDL6T/exec';
+
 /* ----------------------------- State ----------------------------------- */
 const state = {
-  settings: { endpoint: '', project: 'Service Check AC' },
+  settings: { endpoint: DEFAULT_ENDPOINT, project: 'Service Check AC' },
   units: [],
   user: '',          // nama teknisi yang login
   role: '',          // 'admin' | 'teknisi'
@@ -140,6 +143,7 @@ function fileToCompressedDataURL(file, maxSide = 1280, quality = 0.7) {
 async function loadSettings() {
   const s = await idbGet('meta', 'settings');
   if (s) state.settings = Object.assign(state.settings, s);
+  if (!state.settings.endpoint) state.settings.endpoint = DEFAULT_ENDPOINT; // jaga-jaga kalau kosong
 }
 async function saveSettings() {
   state.settings.endpoint = $('#setEndpoint').value.trim();
