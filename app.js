@@ -106,6 +106,7 @@ const state = {
   step: 0,
   reviseSteps: null, // subset step (index STEPS) kalau buka dari tiket revisi; null = semua
   ticketMap: {},     // 'lokasi|ruangan' -> tiket revisi/perbaikan (dari admin)
+  notifiedTickets: new Set(), // tiket yg sudah dinotif (biar gak spam)
   uploading: new Set(), // id unit yang lagi di-upload (buat spinner)
   photoCache: {}     // slot -> dataURL (foto unit yg sedang dibuka)
 };
@@ -512,9 +513,23 @@ async function loadTickets() {
   state.ticketMap = map;
   const box = $('#ticketBox');
   if (box) box.innerHTML = tk.length ? `<div class="banner ticket">🎫 ${tk.length} tiket dari admin — cek Daftar Ruangan</div>` : '';
+  notifyTickets(tk);
   if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
 }
 function ticketOf(u) { return state.ticketMap && state.ticketMap[u.lokasi + '|' + u.ruangan]; }
+
+// Notifikasi HP buat tiket admin baru (mirip re-maintenance)
+function notifyTickets(tk) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const fresh = tk.filter(t => !state.notifiedTickets.has(t.lokasi + '|' + t.ruangan));
+  if (!fresh.length) return;
+  fresh.forEach(t => state.notifiedTickets.add(t.lokasi + '|' + t.ruangan));
+  const title = `🎫 ${fresh.length} tiket baru dari admin`;
+  const body = fresh.slice(0, 5).map(t => '• ' + t.ruangan + ' (' + (t.tipe === 'perbaikan' ? 'Perbaikan' : 'Revisi') + ')').join('\n') + (fresh.length > 5 ? `\n…+${fresh.length - 5} lagi` : '');
+  const opts = { body, tag: 'ac-admin-ticket', renotify: true, icon: './icons/icon-192.png', badge: './icons/icon-192.png' };
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(r => r.showNotification(title, opts)).catch(() => { try { new Notification(title, opts); } catch (e) {} });
+  else { try { new Notification(title, opts); } catch (e) {} }
+}
 function openTicket(t) {
   const u = state.units.find(x => x.lokasi === t.lokasi && x.ruangan === t.ruangan);
   if (!u) { toast('Ruangan ' + t.ruangan + ' belum ada di HP ini', 'bad'); return; }
