@@ -47,14 +47,19 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Build APK (debug)
+      - name: Pasang kunci tetap (signing)
+        run: |
+          cp release.keystore android/app/release.keystore
+          python3 ci/patch-signing.py
+
+      - name: Build APK (release, signed)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk AC-Service.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk AC-Service.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

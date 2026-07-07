@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v40'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v41'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -382,7 +382,16 @@ function openTicket(t) {
 }
 
 /* ----------------------------- Update ---------------------------------- */
+function isNativeApp() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+const RELEASES_URL = 'https://github.com/zaenulilyas/ac-service/releases/latest';
 async function forceUpdate() {
+  if (isNativeApp()) {
+    toast('Membuka halaman download APK terbaru…');
+    try { window.open(RELEASES_URL, '_blank'); } catch (e) { location.href = RELEASES_URL; }
+    return;
+  }
   toast('Cek versi terbaru…');
   try {
     if ('serviceWorker' in navigator) {
