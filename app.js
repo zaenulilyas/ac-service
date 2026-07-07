@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v46'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v47'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -265,12 +265,12 @@ function unitProgress(u) {
 }
 
 /* ----------------------------- Router ---------------------------------- */
-const VIEWS = ['login', 'home', 'admin', 'sites', 'list', 'wizard', 'settings'];
+const VIEWS = ['login', 'home', 'admin', 'review', 'sites', 'list', 'wizard', 'settings'];
 function show(view, opts = {}) {
   VIEWS.forEach(v => $('#view-' + v).classList.toggle('hidden', v !== view));
   const bar = $('#topbar'); if (bar) bar.classList.toggle('hidden', view === 'login');
   const setBtn = $('#settingsBtn');
-  const titles = { login: ['CoolCare', ''], home: ['CoolCare', 'Maintenance & Instalasi'], admin: ['Panel Admin', ''], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
+  const titles = { login: ['CoolCare', ''], home: ['CoolCare', 'Maintenance & Instalasi'], admin: ['Panel Admin', ''], review: ['Review Unit', ''], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
   const ttl = titles[view] || ['', ''];
   $('#viewTitle').textContent = opts.title != null ? opts.title : ttl[0];
   $('#viewSub').textContent = opts.sub != null ? opts.sub : ttl[1];
@@ -378,20 +378,92 @@ async function loadRecords() {
       el.innerHTML = `<div class="no">${esc(String(r.no || '-'))}</div>
         <div class="info"><h3>${esc(r.ruangan)}</h3>
         <p>${esc(r.lokasi)} · ${esc(r.merk || '—')} · ${esc(String(r.status || ''))} · ${esc(r.teknisi || '—')}</p></div>
-        <span class="pill prog">Revisi?</span>`;
-      el.onclick = () => markRevisi(r);
+        <span class="pill todo">Review ›</span>`;
+      el.onclick = () => openReview(r);
       box.appendChild(el);
     });
   } catch (e) { box.innerHTML = '<p class="note" style="color:#f9a3a3">Gagal muat: ' + esc(e.message) + '</p>'; }
   if (btn) { btn.disabled = false; btn.textContent = '🔄 Muat Data Terupload'; }
 }
 
-async function markRevisi(r) {
-  const note = prompt('Catatan revisi untuk "' + r.ruangan + '" (' + r.lokasi + '):', '');
-  if (note === null) return;
+/* --- Review detail per unit (admin) --- */
+const REVIEW_ITEMS = [
+  { key: 'info', label: 'Info Unit', val: r => `${r.merk || '—'} · ${r.pk || '—'} PK` },
+  { key: 'indoor', label: 'Indoor (before/after)', photos: r => r.indoor },
+  { key: 'evaporator', label: 'Evaporator (before/after)', photos: r => r.evaporator },
+  { key: 'kondensor', label: 'Kondensor (before/after)', photos: r => r.kondensor },
+  { key: 'drainase', label: 'Drainase', val: r => r.drainase || '—', photos: r => r.fotoDrainase },
+  { key: 'freon', label: 'Freon (psi)', val: r => r.freon || '—', photos: r => r.fotoFreon },
+  { key: 'ampere', label: 'Ampere (A)', val: r => r.ampere || '—', photos: r => r.fotoAmpere },
+  { key: 'tegangan', label: 'Tegangan (V)', val: r => r.tegangan || '—', photos: r => r.fotoTegangan },
+  { key: 'status', label: 'Status', val: r => r.status || '—' }
+];
+
+function openReview(r) { state.reviewRec = r; show('review', { sub: r.lokasi + ' · ' + r.ruangan }); renderReview(); }
+
+function photoThumbs(urls) {
+  if (!urls || !urls.length) return '<span class="note">— tanpa foto —</span>';
+  return urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener" class="rev-thumb">🖼️ Foto</a>`).join(' ');
+}
+
+function renderReview() {
+  const r = state.reviewRec; const wrap = $('#view-review');
+  wrap.innerHTML = `
+    <div class="card">
+      <div class="kv"><span>Ruangan</span><span>${esc(r.ruangan)}</span></div>
+      <div class="kv"><span>Lokasi</span><span>${esc(r.lokasi)}</span></div>
+      <div class="kv"><span>Teknisi</span><span>${esc(r.teknisi || '—')}</span></div>
+      <div class="kv"><span>Tgl Servis</span><span>${esc(r.tglServis || '—')}</span></div>
+    </div>
+    <p class="note" style="margin:-4px 0 10px">Centang step yang perlu revisi + isi catatannya. Nanti dikirim sekaligus.</p>
+    ${REVIEW_ITEMS.map(it => `
+      <div class="card">
+        <div class="cap" style="margin-bottom:6px"><b>${esc(it.label)}</b>${it.val ? ` — ${esc(it.val(r))}` : ''}</div>
+        ${it.photos ? `<div style="margin-bottom:8px">${photoThumbs(it.photos(r))}</div>` : ''}
+        <label class="rev-check"><input type="checkbox" id="rv_${it.key}"> Perlu revisi</label>
+        <input id="rvn_${it.key}" class="hidden" style="margin-top:8px" placeholder="Catatan revisi ${esc(it.label)}…">
+      </div>`).join('')}
+    <div class="wizard-nav">
+      <button class="btn ghost" id="reviewBack">‹ Kembali</button>
+      <button class="btn ok" id="sendRevisiBtn">📨 Kirim Revisi</button>
+    </div>
+    <button class="btn danger sm" id="tiketPerbaikanBtn" style="width:100%;margin-top:10px">🔧 Buat Tiket Perbaikan Unit</button>`;
+  // toggle catatan saat centang
+  REVIEW_ITEMS.forEach(it => {
+    const cb = $('#rv_' + it.key);
+    if (cb) cb.onchange = () => { const n = $('#rvn_' + it.key); if (n) n.classList.toggle('hidden', !cb.checked); };
+  });
+  on('#reviewBack', 'onclick', () => { show('admin'); renderAdmin(); loadRecords(); });
+  on('#sendRevisiBtn', 'onclick', sendRevisi);
+  on('#tiketPerbaikanBtn', 'onclick', sendPerbaikan);
+}
+
+async function sendRevisi() {
+  const r = state.reviewRec;
+  const parts = [];
+  REVIEW_ITEMS.forEach(it => {
+    const cb = $('#rv_' + it.key);
+    if (cb && cb.checked) {
+      const note = ($('#rvn_' + it.key).value || '').trim();
+      parts.push(it.label + (note ? ': ' + note : ''));
+    }
+  });
+  if (!parts.length) { toast('Centang minimal 1 step yang perlu revisi', 'bad'); return; }
+  const btn = $('#sendRevisiBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Mengirim…'; }
   try {
-    await apiPost({ action: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note });
-    toast('Tiket revisi dikirim ke teknisi ✓', 'ok');
+    await apiPost({ action: 'revisi', type: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note: 'REVISI — ' + parts.join('; ') });
+    toast('Tiket revisi terkirim ke teknisi ✓', 'ok');
+    show('admin'); renderAdmin(); loadRecords();
+  } catch (e) { toast('Gagal: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = '📨 Kirim Revisi'; } }
+}
+
+async function sendPerbaikan() {
+  const r = state.reviewRec;
+  const note = prompt('Tiket perbaikan unit "' + r.ruangan + '" — jelaskan masalahnya (mis. tekanan freon kurang):', '');
+  if (note === null || !note.trim()) return;
+  try {
+    await apiPost({ action: 'revisi', type: 'perbaikan', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note: 'PERBAIKAN — ' + note.trim() });
+    toast('Tiket perbaikan dibuat ✓', 'ok');
   } catch (e) { toast('Gagal: ' + e.message, 'bad'); }
 }
 
@@ -404,12 +476,13 @@ async function loadTickets() {
     const out = await apiPost({ action: 'tickets', teknisi: state.user });
     const tk = out.tickets || [];
     if (!tk.length) return;
-    box.innerHTML = `<div class="banner" style="cursor:default">🎫 ${tk.length} tiket revisi — tap buat kerjain ulang</div>`;
+    box.innerHTML = `<div class="banner ticket" style="cursor:default">🎫 ${tk.length} tiket dari admin — tap buat kerjain</div>`;
     tk.forEach(t => {
+      const isFix = t.tipe === 'perbaikan';
       const el = document.createElement('div');
       el.className = 'unit'; el.style.marginBottom = '10px';
-      el.innerHTML = `<div class="no">🎫</div><div class="info"><h3>${esc(t.ruangan)}</h3>
-        <p>${esc(t.lokasi)}${t.catatan ? ' · ' + esc(t.catatan) : ''}</p></div><span class="pill due">Revisi</span>`;
+      el.innerHTML = `<div class="no">${isFix ? '🔧' : '🎫'}</div><div class="info"><h3>${esc(t.ruangan)}</h3>
+        <p>${esc(t.lokasi)}${t.catatan ? ' · ' + esc(t.catatan) : ''}</p></div><span class="pill ${isFix ? 'due' : 'ticket'}">${isFix ? 'Perbaikan' : 'Revisi'}</span>`;
       el.onclick = () => openTicket(t);
       box.appendChild(el);
     });

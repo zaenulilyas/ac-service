@@ -149,6 +149,10 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
 .kv span:first-child{color:var(--mut)}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--bg2);
   border:1px solid var(--line);border-radius:20px;padding:5px 10px;color:var(--mut)}
+.rev-thumb{display:inline-block;font-size:13px;color:#8fb8fb;background:var(--bg2);
+  border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin:0 4px 4px 0;text-decoration:none}
+.rev-check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--txt);cursor:pointer}
+.rev-check input{width:auto}
 .fab{position:fixed;right:18px;bottom:20px;width:56px;height:56px;border-radius:50%;
   background:var(--acc);color:#fff;font-size:28px;border:none;box-shadow:var(--shadow);
   display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:20;

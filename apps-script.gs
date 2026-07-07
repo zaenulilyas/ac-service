@@ -10,7 +10,7 @@ var DATA_ROW = 3;
 var USERS_SHEET = 'Users';
 var USERS_COLS = ['Username', 'Password', 'Nama', 'Role'];
 var REVISI_SHEET = 'Revisi';
-var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Catatan', 'Status'];
+var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Tipe', 'Catatan', 'Status'];
 var SKIP_SHEETS = { 'Users': 1, 'Revisi': 1, 'Maintenance': 1, 'Sheet1': 1 };
 
 function setup() {
@@ -80,7 +80,7 @@ function apiAddUser(b) {
   return { ok: true };
 }
 
-/* ---------- Records review ---------- */
+/* ---------- Records review (detail + link foto) ---------- */
 function apiRecords(b) {
   var out = [];
   var sheets = ss().getSheets();
@@ -90,30 +90,44 @@ function apiRecords(b) {
     if (sh.getRange(HDR_ROW, 1).getValue() !== 'No') continue;
     var last = sh.getLastRow();
     if (last < DATA_ROW) continue;
-    var vals = sh.getRange(DATA_ROW, 1, last - DATA_ROW + 1, COLS.length).getValues();
-    for (var i = 0; i < vals.length; i++) {
+    var n = last - DATA_ROW + 1;
+    var vals = sh.getRange(DATA_ROW, 1, n, COLS.length).getValues();
+    var rich = sh.getRange(DATA_ROW, 1, n, COLS.length).getRichTextValues();
+    for (var i = 0; i < n; i++) {
       var r = vals[i];
-      if (!r[1]) continue; // ruangan kosong
-      out.push({ lokasi: name, no: r[0], ruangan: r[1], tglServis: r[2], merk: r[3], status: r[12], teknisi: r[14] });
+      if (!r[1]) continue;
+      var linksOf = function (col0) {
+        var rt = rich[i][col0]; if (!rt) return [];
+        var runs = rt.getRuns(); var urls = [];
+        for (var j = 0; j < runs.length; j++) { var u = runs[j].getLinkUrl(); if (u) urls.push(u); }
+        return urls;
+      };
+      out.push({
+        lokasi: name, no: r[0], ruangan: r[1], tglServis: r[2], merk: r[3], pk: r[4],
+        freon: r[5], indoor: linksOf(6), kondensor: linksOf(7), evaporator: linksOf(8),
+        drainase: r[9], ampere: r[10], tegangan: r[11], status: r[12], teknisi: r[14], keterangan: r[15],
+        fotoFreon: linksOf(5), fotoDrainase: linksOf(9), fotoAmpere: linksOf(10), fotoTegangan: linksOf(11)
+      });
     }
   }
   return { ok: true, records: out };
 }
 
 /* ---------- Revisi tickets ---------- */
+// Kolom Revisi (1-based): 1 TS, 2 Lokasi, 3 Ruangan, 4 Teknisi, 5 Tipe, 6 Catatan, 7 Status
 function apiRevisi(b) {
   var sh = ensureRevisi();
   if (!b.lokasi || !b.ruangan) return { ok: false, error: 'lokasi/ruangan kosong' };
-  // Hindari dobel tiket open utk ruangan yg sama
+  var tipe = (b.type === 'perbaikan') ? 'perbaikan' : 'revisi';
   var rows = sh.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
-    if (rows[i][1] === b.lokasi && rows[i][2] === b.ruangan && String(rows[i][5]) === 'open') {
-      sh.getRange(i + 1, 5).setValue(String(b.note || ''));   // update catatan
+    if (rows[i][1] === b.lokasi && rows[i][2] === b.ruangan && rows[i][4] === tipe && String(rows[i][6]) === 'open') {
+      sh.getRange(i + 1, 6).setValue(String(b.note || ''));
       sh.getRange(i + 1, 4).setValue(String(b.teknisi || rows[i][3]));
       return { ok: true, updated: true };
     }
   }
-  sh.appendRow([new Date(), b.lokasi, b.ruangan, String(b.teknisi || ''), String(b.note || ''), 'open']);
+  sh.appendRow([new Date(), b.lokasi, b.ruangan, String(b.teknisi || ''), tipe, String(b.note || ''), 'open']);
   return { ok: true };
 }
 function apiTickets(b) {
@@ -122,9 +136,9 @@ function apiTickets(b) {
   var name = String(b.teknisi || '').trim().toLowerCase();
   var out = [];
   for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][5]) !== 'open') continue;
+    if (String(rows[i][6]) !== 'open') continue;
     if (name && String(rows[i][3]).trim().toLowerCase() !== name) continue;
-    out.push({ lokasi: rows[i][1], ruangan: rows[i][2], catatan: rows[i][4] });
+    out.push({ lokasi: rows[i][1], ruangan: rows[i][2], tipe: rows[i][4], catatan: rows[i][5] });
   }
   return { ok: true, tickets: out };
 }
@@ -132,8 +146,8 @@ function closeTickets(lokasi, ruangan) {
   var sh = ensureRevisi();
   var rows = sh.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
-    if (rows[i][1] === lokasi && rows[i][2] === ruangan && String(rows[i][5]) === 'open') {
-      sh.getRange(i + 1, 6).setValue('done');
+    if (rows[i][1] === lokasi && rows[i][2] === ruangan && String(rows[i][6]) === 'open') {
+      sh.getRange(i + 1, 7).setValue('done');
     }
   }
 }
