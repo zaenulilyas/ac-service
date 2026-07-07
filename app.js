@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v63'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v64'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -130,6 +130,7 @@ const state = {
   reviseSteps: null, // subset step (index STEPS) kalau buka dari tiket revisi; null = semua
   reviseKeys: null,  // subset item review (freon/indoor/...) yg dicentang admin; null = semua
   ticketMap: {},     // 'lokasi|ruangan' -> tiket revisi/perbaikan (dari admin)
+  ticketsSeen: new Set(), // tiket yg sudah dilihat teknisi (buka Daftar Ruangan) → lonceng ilang
   notifiedTickets: new Set(), // tiket yg sudah dinotif (biar gak spam)
   uploading: new Set(), // id unit yang lagi di-upload (buat spinner)
   photoCache: {}     // slot -> dataURL (foto unit yg sedang dibuka)
@@ -326,11 +327,24 @@ async function renderHome() {
   loadTickets();
 }
 
-// Lonceng notif di tile MAINTENANCE = re-maintenance jatuh tempo + tiket admin (revisi/perbaikan)
+// Kunci unik per-tiket (biar tiket baru yg beda note/step tetap ngasih notif ulang)
+function tkKey(t) { return [t.lokasi, t.ruangan, t.tipe, t.catatan, (t.steps || []).join(',')].join('|'); }
+// Tandai semua tiket sebuah site sebagai "sudah dilihat" (dipanggil pas buka Daftar Ruangan)
+function markSiteSeen(site) {
+  let changed = false;
+  Object.values(state.ticketMap || {}).forEach(t => {
+    if (t.lokasi === site) { const k = tkKey(t); if (!state.ticketsSeen.has(k)) { state.ticketsSeen.add(k); changed = true; } }
+  });
+  if (changed) { try { localStorage.setItem('acTicketsSeen', JSON.stringify([...state.ticketsSeen])); } catch (e) {} }
+  updateHomeBadge();
+}
+
+// Lonceng notif di tile MAINTENANCE = re-maintenance jatuh tempo + tiket admin yg BELUM dilihat
 function updateHomeBadge() {
   const tile = document.querySelector('.tile[data-go="maintenance"]');
   if (!tile) return;
-  const n = dueUnits().length + (state.ticketMap ? Object.keys(state.ticketMap).length : 0);
+  const unseenTk = Object.values(state.ticketMap || {}).filter(t => !state.ticketsSeen.has(tkKey(t))).length;
+  const n = dueUnits().length + unseenTk;
   let b = tile.querySelector('.badge-due');
   if (n) { if (!b) { b = document.createElement('span'); b.className = 'badge-due'; tile.appendChild(b); } b.textContent = `🔔 ${n}`; }
   else if (b) b.remove();
@@ -366,6 +380,7 @@ function enterApp() {
   else {
     // pulihin cache tiket dulu biar pill revisi langsung kelihatan (loadTickets refresh di background)
     try { state.ticketMap = JSON.parse(localStorage.getItem('acTickets') || '{}') || {}; } catch (e) { state.ticketMap = {}; }
+    try { state.ticketsSeen = new Set(JSON.parse(localStorage.getItem('acTicketsSeen') || '[]')); } catch (e) { state.ticketsSeen = new Set(); }
     show('home'); renderHome();
   }
 }
@@ -543,6 +558,12 @@ async function loadTickets() {
   const map = {}; tk.forEach(t => { map[t.lokasi + '|' + t.ruangan] = t; });
   state.ticketMap = map;
   try { localStorage.setItem('acTickets', JSON.stringify(map)); } catch (e) {} // cache biar pill langsung tampil pas app dibuka
+  // buang "seen" buat tiket yg udah nutup → kalau nanti ada tiket baru (beda note/step) lonceng nyala lagi
+  const validKeys = new Set(tk.map(tkKey));
+  state.ticketsSeen = new Set([...state.ticketsSeen].filter(k => validKeys.has(k)));
+  try { localStorage.setItem('acTicketsSeen', JSON.stringify([...state.ticketsSeen])); } catch (e) {}
+  // kalau teknisi lagi mantengin Daftar Ruangan, tiket yg baru masuk dianggap langsung dilihat
+  if (state.view === 'list' && state.currentSite) markSiteSeen(state.currentSite);
   updateHomeBadge();
   notifyTickets(tk);
   if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
@@ -638,7 +659,7 @@ function renderSites() {
         <p>${units.length} ruangan · ${done} dikerjakan${due ? ` · 🎫 ${due} tiket` : ''}</p>
       </div>
       ${due ? `<span class="pill ticket">🎫 ${due}</span>` : '<span class="pill todo">›</span>'}`;
-    el.onclick = () => { state.currentSite = site; show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); loadTickets(); };
+    el.onclick = () => { state.currentSite = site; show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); markSiteSeen(site); loadTickets(); };
     box.appendChild(el);
   });
 }
