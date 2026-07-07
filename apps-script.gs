@@ -63,11 +63,10 @@ function approvedSet() {
   for (var i = 1; i < rows.length; i++) { if (String(rows[i][2]) === 'approved') s[rows[i][0] + '|' + rows[i][1]] = 1; }
   return s;
 }
-// Tandai kolom "Approval" di sheet lokasi (kolom ekstra sesudah Keterangan, di luar COLS)
+// Tulis tanda approved di kolom sejajar unit (1 kolom sesudah Keterangan) — tanpa judul & tanpa warna
 function markApprovedInSheet(lokasi, ruangan, by, approved) {
   var sh = sheetFor(lokasi);
   var col = COLS.length + 1;
-  if (sh.getRange(HDR_ROW, col).getValue() !== 'Approval') { sh.getRange(HDR_ROW, col).setValue('Approval'); sh.setColumnWidth(col, 150); }
   var last = sh.getLastRow();
   for (var i = DATA_ROW; i <= last; i++) {
     if (String(sh.getRange(i, 2).getValue()) === String(ruangan)) {
@@ -81,6 +80,13 @@ function apiApprove(b) {
   if (!b.lokasi || !b.ruangan) return { ok: false, error: 'lokasi/ruangan kosong' };
   setApproval(b.lokasi, b.ruangan, 'approved', b.by || '');
   markApprovedInSheet(b.lokasi, b.ruangan, b.by || '', true); // catat "Approve" di spreadsheet
+  return { ok: true };
+}
+
+// Hapus HANYA tanda approved di sheet (dipanggil teknisi pas masuk waktu re-maintenance) — status Approved sheet tetap sampai di-servis ulang
+function apiUnapprove(b) {
+  if (!b.lokasi || !b.ruangan) return { ok: false, error: 'lokasi/ruangan kosong' };
+  markApprovedInSheet(b.lokasi, b.ruangan, '', false);
   return { ok: true };
 }
 
@@ -124,6 +130,7 @@ function doPost(e) {
     if (action === 'revisi') return json(apiRevisi(body));
     if (action === 'tickets') return json(apiTickets(body));
     if (action === 'approve') return json(apiApprove(body));
+    if (action === 'unapprove') return json(apiUnapprove(body));
     return json(apiService(body));
   } catch (err) {
     return json({ ok: false, error: String(err) });

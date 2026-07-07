@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v71'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v72'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -246,6 +246,10 @@ async function resetUnitForTicket(u) {
   u.dueAt = 0; u.synced = false; u.touched = false;
   u.ticketOpen = true; u.updatedAt = Date.now();
   await idbPut('units', u);
+  // masuk waktu re-maintenance → hapus tanda "APPROVED" di spreadsheet (best-effort)
+  if (state.settings.endpoint) {
+    apiPost({ action: 'unapprove', lokasi: u.lokasi, ruangan: u.ruangan }).catch(() => {});
+  }
 }
 // User sudah lihat daftar → tiket "baru" jadi ruangan biasa (Belum) saat balik lagi
 function markSiteTicketsSeen() {
