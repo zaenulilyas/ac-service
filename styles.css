@@ -170,6 +170,12 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
 .card.revise-on{background:rgba(239,68,68,.22)!important;border-color:rgba(239,68,68,.7)!important}
 .rev-sent{font-size:13px;font-weight:600;color:#f9a3a3;background:rgba(239,68,68,.12);
   border:1px solid rgba(239,68,68,.4);border-radius:10px;padding:8px 12px}
+/* Pilihan sumber foto (kamera/galeri) */
+.sheet-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120;display:flex;align-items:flex-end;justify-content:center}
+.sheet-ov .sheet{width:100%;max-width:640px;background:var(--card);border:1px solid var(--line);
+  border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));
+  display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow)}
+.sheet-ov .sheet h3{margin:0 0 6px;font-size:17px}
 /* Mode PC / layar lebar: app melebar (full) + foto lebih besar */
 @media (min-width:820px){
   .app{max-width:1100px;padding:24px 28px}

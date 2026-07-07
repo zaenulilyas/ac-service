@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v69.5'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
+const APP_VERSION = 'v69.6'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -1016,13 +1016,47 @@ function bindStep(i) {
   if (ms) ms.onchange = () => { const w = $('#merkOtherWrap'); if (w) w.classList.toggle('hidden', ms.value !== 'Lainnya'); };
 }
 
-let captureInput = null;
+// Sumber foto default (diingat): 'camera' | 'gallery' | '' (belum dipilih)
+function photoSrcPref() { try { return localStorage.getItem('acPhotoSrc') || ''; } catch (e) { return ''; } }
+function setPhotoSrcPref(v) { try { v ? localStorage.setItem('acPhotoSrc', v) : localStorage.removeItem('acPhotoSrc'); } catch (e) {} }
+
+// Tap foto-box → kalau ada pilihan tersimpan langsung; kalau belum, tampilkan pilihan Kamera/Galeri
 function triggerCapture(slot) {
+  const pref = photoSrcPref();
+  if (pref === 'camera' || pref === 'gallery') { doCapture(slot, pref); return; }
+  showPhotoSourceSheet(slot);
+}
+
+function showPhotoSourceSheet(slot) {
+  let ov = document.getElementById('photoSheet');
+  if (!ov) { ov = document.createElement('div'); ov.id = 'photoSheet'; ov.className = 'sheet-ov hidden'; document.body.appendChild(ov); }
+  ov.innerHTML = `
+    <div class="sheet">
+      <h3>Ambil foto dari?</h3>
+      <button class="btn" id="psCam">📷 Kamera</button>
+      <button class="btn ghost" id="psGal">🖼️ Galeri / File</button>
+      <label class="rev-check" style="margin:10px 2px 0"><input type="checkbox" id="psRemember"> Ingat pilihan (biar langsung ke sana next)</label>
+      <button class="btn ghost sm" id="psCancel" style="margin-top:12px">Batal</button>
+    </div>`;
+  ov.classList.remove('hidden');
+  const close = () => ov.classList.add('hidden');
+  const pick = (src) => { if ($('#psRemember') && $('#psRemember').checked) setPhotoSrcPref(src); close(); doCapture(slot, src); };
+  $('#psCam').onclick = () => pick('camera');
+  $('#psGal').onclick = () => pick('gallery');
+  $('#psCancel').onclick = close;
+  ov.onclick = (e) => { if (e.target === ov) close(); };
+}
+
+let captureInput = null;
+function doCapture(slot, src) {
   if (!captureInput) {
     captureInput = document.createElement('input');
-    captureInput.type = 'file'; captureInput.accept = 'image/*'; captureInput.capture = 'environment';
+    captureInput.type = 'file'; captureInput.accept = 'image/*';
     captureInput.style.display = 'none'; document.body.appendChild(captureInput);
   }
+  // kamera = paksa buka kamera; galeri = tanpa capture → picker file/galeri
+  if (src === 'camera') captureInput.setAttribute('capture', 'environment');
+  else captureInput.removeAttribute('capture');
   captureInput.value = '';
   captureInput.onchange = async () => {
     const f = captureInput.files && captureInput.files[0];
@@ -1243,6 +1277,7 @@ function wire() {
   on('#testConnBtn', 'onclick', testConnection);
   on('#wipeBtn', 'onclick', wipeAll);
   on('#updateBtn', 'onclick', forceUpdate);
+  on('#resetPhotoSrcBtn', 'onclick', () => { setPhotoSrcPref(''); toast('Pilihan sumber foto direset', 'ok'); });
   on('#loginBtn', 'onclick', doLogin);
   on('#logoutBtn', 'onclick', doLogout);
   on('#adminLogoutBtn', 'onclick', doLogout);
