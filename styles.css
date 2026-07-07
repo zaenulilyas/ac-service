@@ -72,6 +72,10 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
   border:1px solid var(--line);border-radius:var(--radius);padding:14px;
   background:var(--card);display:flex;gap:12px;align-items:center;cursor:pointer}
 .unit:active{background:var(--card2)}
+/* Background item ngikut status */
+.unit.st-rev{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.45)}
+.unit.st-done{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.4)}
+.unit.st-prog{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4)}
 .unit .no{width:38px;height:38px;border-radius:10px;background:var(--bg2);
   display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--mut)}
 .unit .info{flex:1;min-width:0}

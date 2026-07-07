@@ -8,7 +8,9 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v68'; // dinaikin tiap update biar keliatan di Pengaturan
+// Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
+const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
+const APP_VERSION = 'v69'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -438,12 +440,12 @@ async function loadRecords() {
         box.appendChild(h);
         byLok[lok].sort((a, b) => (a.no || 0) - (b.no || 0)).forEach(r => {
           const el = document.createElement('div');
-          el.className = 'unit';
           // Status pill: revisi terkirim (open) → Revisi · teknisi sudah re-upload (done) → Complete · lainnya → Review
           let rp;
           if (r.revisi && r.revisi.status === 'open') rp = ['ticket', '🎫 Revisi'];
           else if (r.revisi && r.revisi.status === 'done') rp = ['done', '✓ Complete'];
           else rp = ['todo', 'Review ›'];
+          el.className = 'unit ' + (STATUS_BG[rp[0]] || ''); // background item ngikut status
           el.innerHTML = `<div class="no">${esc(String(r.no || '-'))}</div>
             <div class="info"><h3>${esc(r.ruangan)}</h3>
             <p>${esc(r.merk || '—')} · ${esc(String(r.status || ''))} · ${esc(r.teknisi || '—')}</p></div>
@@ -740,7 +742,7 @@ function renderList(filter = '') {
       if (u.merk) sub = esc(u.merk) + ' · ' + sub;
     }
     const el = document.createElement('div');
-    el.className = 'unit';
+    el.className = 'unit ' + (STATUS_BG[pill[0]] || ''); // background item ngikut status
     el.innerHTML = `
       <div class="no">${idx + 1}</div>
       <div class="info">
