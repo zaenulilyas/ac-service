@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v70'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v71'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -499,13 +499,19 @@ function renderReview() {
       <div class="kv"><span>Keterangan</span><span>${esc(r.keterangan || '—')}</span></div>
     </div>
     <p class="note" style="margin:-4px 0 10px">Centang step yang perlu revisi + isi catatannya. Nanti dikirim sekaligus.</p>
-    ${REVIEW_ITEMS.map(it => `
-      <div class="card" id="revcard_${it.key}">
+    ${REVIEW_ITEMS.map(it => {
+      const sent = !!(r.revisi && r.revisi.status === 'open' && (r.revisi.steps || []).indexOf(it.key) !== -1);
+      const noteTxt = sent ? ((r.revisi.notes && r.revisi.notes[it.key]) || '') : '';
+      return `
+      <div class="card${sent ? ' revise-on' : ''}" id="revcard_${it.key}"${sent ? ' style="background:rgba(239,68,68,.22);border-color:rgba(239,68,68,.7)"' : ''}>
         <div class="cap" style="margin-bottom:6px"><b>${esc(it.label)}</b>${it.val ? ` — ${esc(it.val(r))}` : ''}</div>
         ${it.photos ? `<div style="margin-bottom:8px">${photoThumbs(it.photos(r))}</div>` : ''}
-        <label class="rev-check"><input type="checkbox" id="rv_${it.key}"> Perlu revisi</label>
-        <input id="rvn_${it.key}" class="hidden" style="margin-top:8px" placeholder="Catatan revisi ${esc(it.label)}…">
-      </div>`).join('')}
+        ${sent
+          ? `<div class="rev-sent">🎫 Revisi terkirim${noteTxt ? ' — ' + esc(noteTxt) : ''}</div>`
+          : `<label class="rev-check"><input type="checkbox" id="rv_${it.key}"> Perlu revisi</label>
+        <input id="rvn_${it.key}" class="hidden" style="margin-top:8px" placeholder="Catatan revisi ${esc(it.label)}…">`}
+      </div>`;
+    }).join('')}
     <div class="card" style="display:flex;flex-direction:column;gap:10px">
       <button class="btn ok" id="approveBtn">✓ Approve (Terima Hasil)</button>
       <button class="btn" id="sendRevisiBtn">📨 Kirim Revisi</button>
@@ -543,19 +549,27 @@ async function approveUnit() {
 
 async function sendRevisi() {
   const r = state.reviewRec;
-  const parts = [], keys = [];
+  const parts = [], keys = [], notes = {};
+  const prev = (r.revisi && r.revisi.status === 'open') ? r.revisi : null; // gabung sama revisi yg udah kekirim
   REVIEW_ITEMS.forEach(it => {
     const cb = $('#rv_' + it.key);
     if (cb && cb.checked) {
       const note = ($('#rvn_' + it.key).value || '').trim();
       parts.push(it.label + (note ? ': ' + note : ''));
       keys.push(it.key);
+      if (note) notes[it.key] = note;
+    } else if (prev && prev.steps.indexOf(it.key) !== -1) {
+      // item yg udah dikirim sebelumnya (checkbox disembunyikan) → tetap ikut
+      const pn = (prev.notes && prev.notes[it.key]) || '';
+      parts.push(it.label + (pn ? ': ' + pn : ''));
+      keys.push(it.key);
+      if (pn) notes[it.key] = pn;
     }
   });
   if (!parts.length) { toast('Centang minimal 1 step yang perlu revisi', 'bad'); return; }
   const btn = $('#sendRevisiBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Mengirim…'; }
   try {
-    await apiPost({ action: 'revisi', type: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note: 'REVISI — ' + parts.join('; '), steps: keys.join(',') });
+    await apiPost({ action: 'revisi', type: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note: 'REVISI — ' + parts.join('; '), steps: keys.join(','), notes: JSON.stringify(notes) });
     toast('Tiket revisi terkirim ke teknisi ✓', 'ok');
     show('admin'); renderAdmin();
   } catch (e) { toast('Gagal: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = '📨 Kirim Revisi'; } }

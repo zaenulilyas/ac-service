@@ -168,6 +168,8 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
 .rev-check input{width:auto}
 /* Kartu item yang ditandai "Perlu revisi" → background merah */
 .card.revise-on{background:rgba(239,68,68,.22)!important;border-color:rgba(239,68,68,.7)!important}
+.rev-sent{font-size:13px;font-weight:600;color:#f9a3a3;background:rgba(239,68,68,.12);
+  border:1px solid rgba(239,68,68,.4);border-radius:10px;padding:8px 12px}
 /* Mode PC / layar lebar: app melebar (full) + foto lebih besar */
 @media (min-width:820px){
   .app{max-width:1100px;padding:24px 28px}

@@ -10,7 +10,7 @@ var DATA_ROW = 3;
 var USERS_SHEET = 'Users';
 var USERS_COLS = ['Username', 'Password', 'Nama', 'Role'];
 var REVISI_SHEET = 'Revisi';
-var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Tipe', 'Catatan', 'Status', 'Steps'];
+var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Tipe', 'Catatan', 'Status', 'Steps', 'Notes'];
 var FOTO_SHEET = 'FotoLinks';
 var APPROVED_SHEET = 'Approved';
 var SKIP_SHEETS = { 'Users': 1, 'Revisi': 1, 'Maintenance': 1, 'Sheet1': 1, 'FotoLinks': 1, 'Approved': 1 };
@@ -146,7 +146,13 @@ function revisiStatusMap() {
   var m = {};
   for (var i = 1; i < rows.length; i++) {
     if (!rows[i][1]) continue;
-    m[rows[i][1] + '|' + rows[i][2]] = { tipe: String(rows[i][4]), status: String(rows[i][6]) }; // baris terakhir = paling baru
+    var stepStr = String(rows[i][7] || '');
+    var notesObj = {};
+    try { notesObj = JSON.parse(String(rows[i][8] || '{}')) || {}; } catch (e) { notesObj = {}; }
+    m[rows[i][1] + '|' + rows[i][2]] = {
+      tipe: String(rows[i][4]), status: String(rows[i][6]),
+      steps: stepStr ? stepStr.split(',') : [], notes: notesObj, catatan: String(rows[i][5] || '')
+    }; // baris terakhir = paling baru
   }
   return m;
 }
@@ -211,16 +217,18 @@ function apiRevisi(b) {
   if (!b.lokasi || !b.ruangan) return { ok: false, error: 'lokasi/ruangan kosong' };
   var tipe = (b.type === 'perbaikan') ? 'perbaikan' : 'revisi';
   var steps = String(b.steps || '');
+  var notes = String(b.notes || '');
   var rows = sh.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][1] === b.lokasi && rows[i][2] === b.ruangan && rows[i][4] === tipe && String(rows[i][6]) === 'open') {
       sh.getRange(i + 1, 6).setValue(String(b.note || ''));
       sh.getRange(i + 1, 4).setValue(String(b.teknisi || rows[i][3]));
       sh.getRange(i + 1, 8).setValue(steps);
+      sh.getRange(i + 1, 9).setValue(notes);
       return { ok: true, updated: true };
     }
   }
-  sh.appendRow([new Date(), b.lokasi, b.ruangan, String(b.teknisi || ''), tipe, String(b.note || ''), 'open', steps]);
+  sh.appendRow([new Date(), b.lokasi, b.ruangan, String(b.teknisi || ''), tipe, String(b.note || ''), 'open', steps, notes]);
   return { ok: true };
 }
 function apiTickets(b) {
