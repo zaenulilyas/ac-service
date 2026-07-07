@@ -105,6 +105,7 @@ const state = {
   current: null,     // unit sedang diedit di wizard
   step: 0,
   reviseSteps: null, // subset step (index STEPS) kalau buka dari tiket revisi; null = semua
+  ticketMap: {},     // 'lokasi|ruangan' -> tiket revisi/perbaikan (dari admin)
   uploading: new Set(), // id unit yang lagi di-upload (buat spinner)
   photoCache: {}     // slot -> dataURL (foto unit yg sedang dibuka)
 };
@@ -504,25 +505,16 @@ async function sendPerbaikan() {
 
 /* Tiket revisi di sisi teknisi (tampil di home) */
 async function loadTickets() {
-  const box = $('#ticketBox'); if (!box) return;
-  box.innerHTML = '';
-  if (!state.settings.endpoint || state.role === 'admin') return;
-  try {
-    const out = await apiPost({ action: 'tickets', teknisi: state.user });
-    const tk = out.tickets || [];
-    if (!tk.length) return;
-    box.innerHTML = `<div class="banner ticket" style="cursor:default">🎫 ${tk.length} tiket dari admin — tap buat kerjain</div>`;
-    tk.forEach(t => {
-      const isFix = t.tipe === 'perbaikan';
-      const el = document.createElement('div');
-      el.className = 'unit'; el.style.marginBottom = '10px';
-      el.innerHTML = `<div class="no">${isFix ? '🔧' : '🎫'}</div><div class="info"><h3>${esc(t.ruangan)}</h3>
-        <p>${esc(t.lokasi)}${t.catatan ? ' · ' + esc(t.catatan) : ''}</p></div><span class="pill ${isFix ? 'due' : 'ticket'}">${isFix ? 'Perbaikan' : 'Revisi'}</span>`;
-      el.onclick = () => openTicket(t);
-      box.appendChild(el);
-    });
-  } catch (e) { /* diamkan; offline */ }
+  if (state.role === 'admin' || !state.settings.endpoint) { state.ticketMap = {}; return; }
+  let tk = [];
+  try { const out = await apiPost({ action: 'tickets', teknisi: state.user }); tk = out.tickets || []; } catch (e) { return; }
+  const map = {}; tk.forEach(t => { map[t.lokasi + '|' + t.ruangan] = t; });
+  state.ticketMap = map;
+  const box = $('#ticketBox');
+  if (box) box.innerHTML = tk.length ? `<div class="banner ticket">🎫 ${tk.length} tiket dari admin — cek Daftar Ruangan</div>` : '';
+  if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
 }
+function ticketOf(u) { return state.ticketMap && state.ticketMap[u.lokasi + '|' + u.ruangan]; }
 function openTicket(t) {
   const u = state.units.find(x => x.lokasi === t.lokasi && x.ruangan === t.ruangan);
   if (!u) { toast('Ruangan ' + t.ruangan + ' belum ada di HP ini', 'bad'); return; }
@@ -599,7 +591,7 @@ function renderSites() {
         <p>${units.length} ruangan · ${done} dikerjakan${due ? ` · 🎫 ${due} tiket` : ''}</p>
       </div>
       ${due ? `<span class="pill ticket">🎫 ${due}</span>` : '<span class="pill todo">›</span>'}`;
-    el.onclick = () => { state.currentSite = site; show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); };
+    el.onclick = () => { state.currentSite = site; show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); loadTickets(); };
     box.appendChild(el);
   });
 }
@@ -612,7 +604,7 @@ function renderList(filter = '') {
   const inSite = siteUnits(state.currentSite);
   // Sembunyikan ruangan yang sudah di-upload & belum jatuh tempo.
   // Muncul lagi otomatis pas jatuh tempo (daysUntil <= 0).
-  const visible = inSite.filter(u => !(u.synced && notDueYet(u)));
+  const visible = inSite.filter(u => ticketOf(u) || !(u.synced && notDueYet(u)));
 
   const banner = $('#dueBanner'); if (banner) banner.className = 'banner hidden'; // tiket cukup di baris ruangan
 
@@ -638,14 +630,17 @@ function renderList(filter = '') {
   }
 
   items.forEach((u, idx) => {
+    const tk = ticketOf(u);
     let pill;
     if (state.uploading.has(u.id)) pill = ['uploading', '<span class="spin"></span>Upload…'];
+    else if (tk) pill = (tk.tipe === 'perbaikan') ? ['due', '🔧 Perbaikan'] : ['ticket', '🎫 Revisi'];
     else if (isComplete(u)) pill = ['done', '✓ Selesai'];
     else if (isProgres(u)) pill = ['prog', 'Progres'];
     else if (u.ticketOpen) pill = ['ticket', '🎫 Tiket baru'];
     else pill = ['todo', 'Belum'];
     let sub = '';
-    if (isMaintained(u)) {
+    if (tk && tk.catatan) sub = esc(tk.catatan);
+    else if (isMaintained(u)) {
       const ms = dueTime(u) - Date.now();
       let rem;
       if (ms <= 0) rem = 'tiket baru';
@@ -663,7 +658,7 @@ function renderList(filter = '') {
         ${sub ? `<p>${sub}</p>` : ''}
       </div>
       <span class="pill ${pill[0]}">${pill[1]}</span>`;
-    el.onclick = () => openWizard(u.id);
+    el.onclick = tk ? () => openTicket(tk) : () => openWizard(u.id);
     box.appendChild(el);
   });
 }
@@ -1090,6 +1085,7 @@ async function boot() {
   // auto-refresh: cek tiket baru + render ulang (penting buat mode tes menit)
   setInterval(async () => {
     const changed = await processTickets();
+    loadTickets(); // refresh tiket admin (revisi/perbaikan) → pill di daftar ruangan
     if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
     else if (state.view === 'home') renderHome();
     else if (changed && state.view === 'sites') renderSites();
