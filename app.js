@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v64'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v65'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -281,6 +281,12 @@ function isComplete(u) {
 }
 // Sudah mulai dikerjakan tapi belum lengkap → "Progres"
 function isProgres(u) { return (u.touched || isMaintained(u)) && !isComplete(u); }
+// Siap upload: unit revisi cukup item yg ditandai admin; selain itu wajib lengkap penuh
+function unitDone(u) {
+  const tk = ticketOf(u);
+  if (tk && tk.tipe === 'revisi') return ticketMissing(u, tk).length === 0;
+  return isComplete(u);
+}
 
 function unitProgress(u) {
   // hitung kelengkapan sederhana: info + minimal 1 foto + status
@@ -1037,8 +1043,8 @@ async function syncAll() {
   const ep = state.settings.endpoint;
   if (!ep) { toast('Isi URL Apps Script di ⚙️ dulu', 'bad'); return; }
   const site = siteUnits(state.currentSite);
-  const ready = site.filter(u => !u.synced && isComplete(u));
-  const incomplete = site.filter(u => !u.synced && isProgres(u));
+  const ready = site.filter(u => !u.synced && unitDone(u));
+  const incomplete = site.filter(u => !u.synced && !unitDone(u) && isProgres(u));
   if (!ready.length) {
     if (incomplete.length) {
       const names = incomplete.slice(0, 3).map(u => u.ruangan).join(', ');

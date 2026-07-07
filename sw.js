@@ -1,5 +1,5 @@
 /* Network-first service worker (biar update file kebaca pas online) */
-const CACHE = 'ac-service-v64';
+const CACHE = 'ac-service-v65';
 const ASSETS = [
   './',
   './index.html',
