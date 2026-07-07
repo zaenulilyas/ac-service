@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v61'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v62'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -675,9 +675,10 @@ function renderList(filter = '') {
     const tk = ticketOf(u);
     let pill;
     if (state.uploading.has(u.id)) pill = ['uploading', '<span class="spin"></span>Upload…'];
-    else if (tk) pill = (tk.tipe === 'perbaikan') ? ['due', '🔧 Perbaikan'] : ['ticket', '🎫 Revisi'];
-    else if (isComplete(u)) pill = ['done', '✓ Selesai'];
+    else if (tk && u.synced) pill = (tk.tipe === 'perbaikan') ? ['due', '🔧 Perbaikan'] : ['ticket', '🎫 Revisi']; // tiket belum dikerjakan
+    else if (isComplete(u)) pill = ['done', '✓ Selesai']; // termasuk revisi yg sudah dikerjakan (nunggu upload)
     else if (isProgres(u)) pill = ['prog', 'Progres'];
+    else if (tk) pill = (tk.tipe === 'perbaikan') ? ['due', '🔧 Perbaikan'] : ['ticket', '🎫 Revisi'];
     else if (u.ticketOpen) pill = ['ticket', '🎫 Tiket baru'];
     else pill = ['todo', 'Belum'];
     let sub = '';
