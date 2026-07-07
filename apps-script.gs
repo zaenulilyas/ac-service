@@ -10,7 +10,7 @@ var DATA_ROW = 3;
 var USERS_SHEET = 'Users';
 var USERS_COLS = ['Username', 'Password', 'Nama', 'Role'];
 var REVISI_SHEET = 'Revisi';
-var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Tipe', 'Catatan', 'Status'];
+var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Tipe', 'Catatan', 'Status', 'Steps'];
 var FOTO_SHEET = 'FotoLinks';
 var APPROVED_SHEET = 'Approved';
 var SKIP_SHEETS = { 'Users': 1, 'Revisi': 1, 'Maintenance': 1, 'Sheet1': 1, 'FotoLinks': 1, 'Approved': 1 };
@@ -195,15 +195,17 @@ function apiRevisi(b) {
   var sh = ensureRevisi();
   if (!b.lokasi || !b.ruangan) return { ok: false, error: 'lokasi/ruangan kosong' };
   var tipe = (b.type === 'perbaikan') ? 'perbaikan' : 'revisi';
+  var steps = String(b.steps || '');
   var rows = sh.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][1] === b.lokasi && rows[i][2] === b.ruangan && rows[i][4] === tipe && String(rows[i][6]) === 'open') {
       sh.getRange(i + 1, 6).setValue(String(b.note || ''));
       sh.getRange(i + 1, 4).setValue(String(b.teknisi || rows[i][3]));
+      sh.getRange(i + 1, 8).setValue(steps);
       return { ok: true, updated: true };
     }
   }
-  sh.appendRow([new Date(), b.lokasi, b.ruangan, String(b.teknisi || ''), tipe, String(b.note || ''), 'open']);
+  sh.appendRow([new Date(), b.lokasi, b.ruangan, String(b.teknisi || ''), tipe, String(b.note || ''), 'open', steps]);
   return { ok: true };
 }
 function apiTickets(b) {
@@ -214,7 +216,8 @@ function apiTickets(b) {
   for (var i = 1; i < rows.length; i++) {
     if (String(rows[i][6]) !== 'open') continue;
     if (name && String(rows[i][3]).trim().toLowerCase() !== name) continue;
-    out.push({ lokasi: rows[i][1], ruangan: rows[i][2], tipe: rows[i][4], catatan: rows[i][5] });
+    var stepStr = String(rows[i][7] || '');
+    out.push({ lokasi: rows[i][1], ruangan: rows[i][2], tipe: rows[i][4], catatan: rows[i][5], steps: stepStr ? stepStr.split(',') : [] });
   }
   return { ok: true, tickets: out };
 }

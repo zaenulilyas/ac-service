@@ -54,6 +54,8 @@ const UKUR_SLOTS = [
 ];
 
 const STEPS = ['Info Unit', 'Unit Indoor', 'Unit Outdoor', 'Hasil Ukur', 'Drainase', 'Penilaian', 'Simpan'];
+// Map item review (yg dicentang admin) → index step wizard, buat revisi terarah
+const REVIEW_TO_STEP = { info: 0, nametag: 0, indoor: 1, evaporator: 1, kondensor: 2, freon: 3, ampere: 3, tegangan: 3, drainase: 4, status: 5 };
 
 /* --------------------------- IndexedDB --------------------------------- */
 const DB_NAME = 'ac-service-db';
@@ -102,6 +104,7 @@ const state = {
   currentSite: '',   // lokasi (site) yang dipilih
   current: null,     // unit sedang diedit di wizard
   step: 0,
+  reviseSteps: null, // subset step (index STEPS) kalau buka dari tiket revisi; null = semua
   uploading: new Set(), // id unit yang lagi di-upload (buat spinner)
   photoCache: {}     // slot -> dataURL (foto unit yg sedang dibuka)
 };
@@ -471,18 +474,19 @@ async function approveUnit() {
 
 async function sendRevisi() {
   const r = state.reviewRec;
-  const parts = [];
+  const parts = [], keys = [];
   REVIEW_ITEMS.forEach(it => {
     const cb = $('#rv_' + it.key);
     if (cb && cb.checked) {
       const note = ($('#rvn_' + it.key).value || '').trim();
       parts.push(it.label + (note ? ': ' + note : ''));
+      keys.push(it.key);
     }
   });
   if (!parts.length) { toast('Centang minimal 1 step yang perlu revisi', 'bad'); return; }
   const btn = $('#sendRevisiBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Mengirim…'; }
   try {
-    await apiPost({ action: 'revisi', type: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note: 'REVISI — ' + parts.join('; ') });
+    await apiPost({ action: 'revisi', type: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note: 'REVISI — ' + parts.join('; '), steps: keys.join(',') });
     toast('Tiket revisi terkirim ke teknisi ✓', 'ok');
     show('admin'); renderAdmin();
   } catch (e) { toast('Gagal: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = '📨 Kirim Revisi'; } }
@@ -521,8 +525,16 @@ async function loadTickets() {
 }
 function openTicket(t) {
   const u = state.units.find(x => x.lokasi === t.lokasi && x.ruangan === t.ruangan);
-  if (u) { state.currentSite = t.lokasi; openWizard(u.id); }
-  else toast('Ruangan ' + t.ruangan + ' belum ada di HP ini', 'bad');
+  if (!u) { toast('Ruangan ' + t.ruangan + ' belum ada di HP ini', 'bad'); return; }
+  state.currentSite = t.lokasi;
+  let rev = null;
+  if (t.tipe === 'revisi' && t.steps && t.steps.length) {
+    const set = new Set();
+    t.steps.forEach(k => { const s = REVIEW_TO_STEP[k]; if (s != null) set.add(s); });
+    set.add(STEPS.length - 1); // selalu sertakan Ringkasan/Simpan
+    rev = Array.from(set).sort((a, b) => a - b);
+  }
+  openWizard(u.id, rev);
 }
 
 /* ----------------------------- Update ---------------------------------- */
@@ -657,10 +669,11 @@ function renderList(filter = '') {
 }
 
 /* ----------------------------- Wizard ---------------------------------- */
-async function openWizard(id) {
+async function openWizard(id, reviseSteps) {
   const u = state.units.find(x => x.id === id);
   if (!u) return;
   markSiteTicketsSeen(); // buka ruangan = udah lihat daftar → tiket lain jadi Belum
+  state.reviseSteps = (reviseSteps && reviseSteps.length) ? reviseSteps : null;
   state.current = JSON.parse(JSON.stringify(u));
   state.step = 0;
   // load foto ke cache
@@ -673,25 +686,30 @@ async function openWizard(id) {
   renderWizard();
 }
 
+function activeSteps() { return (state.reviseSteps && state.reviseSteps.length) ? state.reviseSteps : STEPS.map((_, k) => k); }
+
 function renderWizard() {
-  const u = state.current, i = state.step;
+  const steps = activeSteps();
+  const pos = state.step;              // posisi dalam daftar step aktif
+  const real = steps[pos];             // index step sebenarnya (0..6)
+  const last = steps.length - 1;
   const wrap = $('#view-wizard');
-  const bar = STEPS.map((_, k) => `<div class="s ${k < i ? 'done' : k === i ? 'active' : ''}"></div>`).join('');
+  const bar = steps.map((_, k) => `<div class="s ${k < pos ? 'done' : k === pos ? 'active' : ''}"></div>`).join('');
+  const revLabel = state.reviseSteps ? ' · Revisi' : '';
   wrap.innerHTML = `
     <div class="steps">${bar}</div>
-    <div class="step-title">Langkah ${i + 1}/${STEPS.length}</div>
-    <div class="step">${renderStep(i)}</div>
+    <div class="step-title">Langkah ${pos + 1}/${steps.length}${revLabel}</div>
+    <div class="step">${renderStep(real)}</div>
     <div class="wizard-nav">
-      ${i > 0 ? '<button class="btn ghost" id="prevStep">‹ Sebelumnya</button>' : '<button class="btn ghost" id="prevMenu">‹ Sebelumnya</button>'}
-      ${i < STEPS.length - 1 ? '<button class="btn" id="nextStep">Lanjut ›</button>' : '<button class="btn ok" id="saveUnit">💾 Simpan</button>'}
+      ${pos > 0 ? '<button class="btn ghost" id="prevStep">‹ Sebelumnya</button>' : '<button class="btn ghost" id="prevMenu">‹ Sebelumnya</button>'}
+      ${pos < last ? '<button class="btn" id="nextStep">Lanjut ›</button>' : '<button class="btn ok" id="saveUnit">💾 Simpan</button>'}
     </div>`;
-  bindStep(i);
-  // nav
-  const nx = $('#nextStep'); if (nx) nx.onclick = async () => { collectStep(i); await persistCurrent(false); state.step++; renderWizard(); };
-  const pv = $('#prevStep'); if (pv) pv.onclick = async () => { collectStep(i); await persistCurrent(false); state.step--; renderWizard(); };
+  bindStep(real);
+  const nx = $('#nextStep'); if (nx) nx.onclick = async () => { collectStep(real); await persistCurrent(false); state.step++; renderWizard(); };
+  const pv = $('#prevStep'); if (pv) pv.onclick = async () => { collectStep(real); await persistCurrent(false); state.step--; renderWizard(); };
   const pm = $('#prevMenu'); if (pm) pm.onclick = goBack;
   const del = $('#delUnit'); if (del) del.onclick = deleteCurrentUnit;
-  const sv = $('#saveUnit'); if (sv) sv.onclick = () => { collectStep(i); saveCurrentUnit(); };
+  const sv = $('#saveUnit'); if (sv) sv.onclick = () => { collectStep(real); saveCurrentUnit(); };
 }
 
 function h2(t) { return `<h2>${t}</h2>`; }
