@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v49'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v50'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -349,7 +349,7 @@ async function apiPost(payload) {
   return out;
 }
 
-function renderAdmin() { /* form kosong; daftar dimuat saat tombol ditekan */ }
+function renderAdmin() { loadRecords(); } // auto-muat daftar begitu panel admin dibuka
 
 async function addNewUser() {
   const user = ($('#nuUser').value || '').trim();
@@ -449,7 +449,7 @@ function renderReview() {
     const cb = $('#rv_' + it.key);
     if (cb) cb.onchange = () => { const n = $('#rvn_' + it.key); if (n) n.classList.toggle('hidden', !cb.checked); };
   });
-  on('#reviewBack', 'onclick', () => { show('admin'); renderAdmin(); loadRecords(); });
+  on('#reviewBack', 'onclick', () => { show('admin'); renderAdmin(); });
   on('#sendRevisiBtn', 'onclick', sendRevisi);
   on('#tiketPerbaikanBtn', 'onclick', sendPerbaikan);
 }
@@ -469,7 +469,7 @@ async function sendRevisi() {
   try {
     await apiPost({ action: 'revisi', type: 'revisi', lokasi: r.lokasi, ruangan: r.ruangan, teknisi: r.teknisi || '', note: 'REVISI — ' + parts.join('; ') });
     toast('Tiket revisi terkirim ke teknisi ✓', 'ok');
-    show('admin'); renderAdmin(); loadRecords();
+    show('admin'); renderAdmin();
   } catch (e) { toast('Gagal: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = '📨 Kirim Revisi'; } }
 }
 
