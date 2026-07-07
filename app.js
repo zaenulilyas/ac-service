@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v69.1'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
+const APP_VERSION = 'v69.2'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -132,6 +132,7 @@ const state = {
   reviseSteps: null, // subset step (index STEPS) kalau buka dari tiket revisi; null = semua
   reviseKeys: null,  // subset item review (freon/indoor/...) yg dicentang admin; null = semua
   ticketMap: {},     // 'lokasi|ruangan' -> tiket revisi/perbaikan (dari admin)
+  serverServiced: {}, // 'lokasi|ruangan' -> tgl berikutnya (ISO), dari server → sinkron antar teknisi
   ticketsSeen: new Set(), // tiket yg sudah dilihat teknisi (buka Daftar Ruangan) → lonceng ilang
   notifiedTickets: new Set(), // tiket yg sudah dinotif (biar gak spam)
   uploading: new Set(), // id unit yang lagi di-upload (buat spinner)
@@ -393,7 +394,8 @@ function enterApp() {
     // pulihin cache tiket dulu biar pill revisi langsung kelihatan (loadTickets refresh di background)
     try { state.ticketMap = JSON.parse(localStorage.getItem('acTickets') || '{}') || {}; } catch (e) { state.ticketMap = {}; }
     try { state.ticketsSeen = new Set(JSON.parse(localStorage.getItem('acTicketsSeen') || '[]')); } catch (e) { state.ticketsSeen = new Set(); }
-    show('home'); renderHome();
+    try { state.serverServiced = JSON.parse(localStorage.getItem('acServiced') || '{}') || {}; } catch (e) { state.serverServiced = {}; }
+    show('home'); renderHome(); loadServerStatus();
   }
 }
 function doLogout() {
@@ -609,6 +611,24 @@ async function loadTickets() {
 }
 function ticketOf(u) { return state.ticketMap && state.ticketMap[u.lokasi + '|' + u.ruangan]; }
 
+// Sinkron antar teknisi: ambil status "sudah dikerjakan" semua ruangan dari server
+async function loadServerStatus() {
+  if (!state.settings.endpoint) return;
+  try {
+    const out = await apiPost({ action: 'status' });
+    state.serverServiced = out.serviced || {};
+    try { localStorage.setItem('acServiced', JSON.stringify(state.serverServiced)); } catch (e) {}
+    if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
+  } catch (e) { /* offline → pakai cache lokal */ }
+}
+// Ruangan sudah dikerjakan teknisi lain & belum jatuh tempo → sembunyikan juga di sini
+function serverHidden(u) {
+  const key = u.lokasi + '|' + u.ruangan;
+  if (!(key in state.serverServiced)) return false;
+  const next = state.serverServiced[key];
+  return !next || todayISO() < next; // done & belum jatuh tempo servis ulang
+}
+
 // Notifikasi HP buat tiket admin baru (mirip re-maintenance)
 function notifyTickets(tk) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
@@ -698,7 +718,7 @@ function renderSites() {
         <p>${units.length} ruangan · ${done} dikerjakan${due ? ` · 🎫 ${due} tiket` : ''}</p>
       </div>
       ${due ? `<span class="pill ticket">🎫 ${due}</span>` : '<span class="pill todo">›</span>'}`;
-    el.onclick = () => { state.currentSite = site; show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); markSiteSeen(site); loadTickets(); };
+    el.onclick = () => { state.currentSite = site; show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); markSiteSeen(site); loadTickets(); loadServerStatus(); };
     box.appendChild(el);
   });
 }
@@ -709,9 +729,9 @@ function renderList(filter = '') {
   const q = filter.trim().toLowerCase();
 
   const inSite = siteUnits(state.currentSite);
-  // Sembunyikan ruangan yang sudah di-upload & belum jatuh tempo.
-  // Muncul lagi otomatis pas jatuh tempo (daysUntil <= 0).
-  const visible = inSite.filter(u => ticketOf(u) || !(u.synced && notDueYet(u)));
+  // Sembunyikan ruangan yang sudah dikerjakan (HP ini ATAU teknisi lain) & belum jatuh tempo.
+  // Muncul lagi otomatis pas jatuh tempo. Kalau ada tiket admin → tetap tampil.
+  const visible = inSite.filter(u => ticketOf(u) || !((u.synced && notDueYet(u)) || serverHidden(u)));
 
   const banner = $('#dueBanner'); if (banner) banner.className = 'banner hidden'; // tiket cukup di baris ruangan
 
@@ -1169,10 +1189,20 @@ async function renderSettings() {
 }
 
 async function wipeAll() {
-  if (!confirm('Hapus SEMUA data & foto dari HP ini? Tidak bisa dibatalkan.')) return;
-  await idbClear('units'); await idbClear('photos');
-  state.units = [];
-  toast('Semua data dihapus');
+  if (!confirm('RESET KE AWAL?\n\nSemua hasil servis DI SERVER (spreadsheet) & di semua HP teknisi akan dihapus. Daftar ruangan balik ke kondisi awal (semua "Belum").\n\nTidak bisa dibatalkan.')) return;
+  const btn = $('#wipeBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Mereset…'; }
+  // 1) reset server (biar semua teknisi ikut ke-reset)
+  if (state.settings.endpoint) {
+    try { await apiPost({ action: 'resetAll' }); }
+    catch (e) { toast('Reset server gagal: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = 'Reset ke Awal'; } return; }
+  }
+  // 2) reset lokal + seed ulang daftar ruangan
+  await idbClear('units'); await idbClear('photos'); await idbDel('meta', 'seedv2');
+  state.serverServiced = {}; state.ticketMap = {}; state.ticketsSeen = new Set();
+  try { localStorage.removeItem('acServiced'); localStorage.removeItem('acTickets'); localStorage.removeItem('acTicketsSeen'); } catch (e) {}
+  await seedIfNeeded(); await loadUnits();
+  if (btn) { btn.disabled = false; btn.textContent = 'Reset ke Awal'; }
+  toast('Direset ke awal ✓', 'ok');
   renderSettings(); renderHome();
 }
 
@@ -1235,6 +1265,7 @@ async function boot() {
   setInterval(async () => {
     const changed = await processTickets();
     loadTickets(); // refresh tiket admin (revisi/perbaikan) → pill di daftar ruangan
+    if (state.role === 'teknisi') loadServerStatus(); // sinkron "sudah dikerjakan" antar teknisi
     if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
     else if (state.view === 'home') renderHome();
     else if (changed && state.view === 'sites') renderSites();

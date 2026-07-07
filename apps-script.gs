@@ -120,6 +120,53 @@ function doGet(e) {
   return json({ ok: true });
 }
 
+function toISO(v) {
+  if (!v) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return v.getFullYear() + '-' + ('0' + (v.getMonth() + 1)).slice(-2) + '-' + ('0' + v.getDate()).slice(-2);
+  }
+  return String(v);
+}
+
+// Status "sudah dikerjakan" semua ruangan (sinkron antar teknisi). key "Lokasi|Ruangan" -> tgl berikutnya (ISO)
+function apiStatus(b) {
+  var serviced = {};
+  var sheets = ss().getSheets();
+  for (var s = 0; s < sheets.length; s++) {
+    var sh = sheets[s]; var name = sh.getName();
+    if (SKIP_SHEETS[name]) continue;
+    if (sh.getRange(HDR_ROW, 1).getValue() !== 'No') continue;
+    var last = sh.getLastRow();
+    if (last < DATA_ROW) continue;
+    var vals = sh.getRange(DATA_ROW, 1, last - DATA_ROW + 1, COLS.length).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var r = vals[i];
+      if (!r[1] || !r[2]) continue; // butuh ruangan + Tgl Servis (=udah dikerjakan)
+      serviced[name + '|' + r[1]] = toISO(r[13]); // Tgl Berikutnya
+    }
+  }
+  return { ok: true, serviced: serviced };
+}
+
+function clearSheetData(nm) {
+  var sh = ss().getSheetByName(nm); if (!sh) return;
+  var last = sh.getLastRow(); if (last >= 2) sh.getRange(2, 1, last - 1, sh.getLastColumn()).clearContent();
+}
+
+// Reset SEMUA data servis ke awal (kosongkan sheet lokasi + Approved + Revisi + FotoLinks). Header tetap.
+function apiResetAll(b) {
+  var sheets = ss().getSheets();
+  for (var s = 0; s < sheets.length; s++) {
+    var sh = sheets[s]; var name = sh.getName();
+    if (SKIP_SHEETS[name]) continue;
+    if (sh.getRange(HDR_ROW, 1).getValue() !== 'No') continue;
+    var last = sh.getLastRow();
+    if (last >= DATA_ROW) sh.getRange(DATA_ROW, 1, last - DATA_ROW + 1, sh.getLastColumn()).clearContent();
+  }
+  clearSheetData(APPROVED_SHEET); clearSheetData(REVISI_SHEET); clearSheetData(FOTO_SHEET);
+  return { ok: true };
+}
+
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
@@ -131,6 +178,8 @@ function doPost(e) {
     if (action === 'tickets') return json(apiTickets(body));
     if (action === 'approve') return json(apiApprove(body));
     if (action === 'unapprove') return json(apiUnapprove(body));
+    if (action === 'status') return json(apiStatus(body));
+    if (action === 'resetAll') return json(apiResetAll(body));
     return json(apiService(body));
   } catch (err) {
     return json({ ok: false, error: String(err) });
