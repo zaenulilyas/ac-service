@@ -52,6 +52,7 @@ function setApproval(lokasi, ruangan, status, by) {
   sh.appendRow([lokasi, ruangan, status, by || '', new Date()]);
 }
 function clearApproval(lokasi, ruangan) {
+  markApprovedInSheet(lokasi, ruangan, '', false); // upload ulang → hapus tanda Approve di sheet
   var sh = ss().getSheetByName(APPROVED_SHEET); if (!sh) return;
   var rows = sh.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) { if (rows[i][0] === lokasi && rows[i][1] === ruangan) { sh.getRange(i + 1, 3).setValue(''); return; } }
@@ -62,9 +63,24 @@ function approvedSet() {
   for (var i = 1; i < rows.length; i++) { if (String(rows[i][2]) === 'approved') s[rows[i][0] + '|' + rows[i][1]] = 1; }
   return s;
 }
+// Tandai kolom "Approval" di sheet lokasi (kolom ekstra sesudah Keterangan, di luar COLS)
+function markApprovedInSheet(lokasi, ruangan, by, approved) {
+  var sh = sheetFor(lokasi);
+  var col = COLS.length + 1;
+  if (sh.getRange(HDR_ROW, col).getValue() !== 'Approval') { sh.getRange(HDR_ROW, col).setValue('Approval'); sh.setColumnWidth(col, 150); }
+  var last = sh.getLastRow();
+  for (var i = DATA_ROW; i <= last; i++) {
+    if (String(sh.getRange(i, 2).getValue()) === String(ruangan)) {
+      sh.getRange(i, col).setValue(approved ? ('✅ APPROVED' + (by ? ' — ' + by : '')) : '');
+      return;
+    }
+  }
+}
+
 function apiApprove(b) {
   if (!b.lokasi || !b.ruangan) return { ok: false, error: 'lokasi/ruangan kosong' };
   setApproval(b.lokasi, b.ruangan, 'approved', b.by || '');
+  markApprovedInSheet(b.lokasi, b.ruangan, b.by || '', true); // catat "Approve" di spreadsheet
   return { ok: true };
 }
 
