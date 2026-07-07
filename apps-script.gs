@@ -68,6 +68,7 @@ function apiApprove(b) {
   return { ok: true };
 }
 
+function mergeObj(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
 function loadFotoMap() {
   var map = {};
   var sh = ss().getSheetByName(FOTO_SHEET);
@@ -286,9 +287,6 @@ function apiService(body) {
     });
   }
 
-  var row = [0, u.ruangan, u.tglServis, u.merk, u.pk, u.freon,
-    '', '', '', (k.drainase || ''), u.ampere, u.tegangan, u.status, u.tglBerikutnya, u.teknisi1, (u.catatan || '')];
-
   var sh = sheetFor(lokasi);
   var last = sh.getLastRow();
   var target = 0;
@@ -296,24 +294,37 @@ function apiService(body) {
     var names = sh.getRange(DATA_ROW, 2, last - DATA_ROW + 1, 1).getValues();
     for (var i = 0; i < names.length; i++) { if (String(names[i][0]) === String(u.ruangan)) { target = DATA_ROW + i; break; } }
   }
+  var exists = !!target;
   if (!target) target = Math.max(last + 1, DATA_ROW);
-  row[0] = target - DATA_ROW + 1;
+
+  // MERGE (revisi): gabung link foto lama + baru, pertahankan nilai lama kalau baru kosong
+  var mergedLinks = (body.merge && exists) ? mergeObj((loadFotoMap()[lokasi + '|' + u.ruangan]) || {}, links) : links;
+  var old = (body.merge && exists) ? sh.getRange(target, 1, 1, COLS.length).getValues()[0] : [];
+  var pick = function (val, idx) {
+    if (body.merge && exists) { return String(val == null ? '' : val).trim() !== '' ? val : old[idx]; }
+    return val;
+  };
+
+  var row = [target - DATA_ROW + 1, u.ruangan, pick(u.tglServis, 2), pick(u.merk, 3), pick(u.pk, 4),
+    pick(u.freon, 5), '', '', '', pick((k.drainase || ''), 9), pick(u.ampere, 10), pick(u.tegangan, 11),
+    pick(u.status, 12), pick(u.tglBerikutnya, 13), pick(u.teknisi1, 14), pick((u.catatan || ''), 15)];
   sh.getRange(target, 1, 1, row.length).setValues([row]);
 
+  var L = mergedLinks;
   var setRich = function (col, rtv) { if (rtv) sh.getRange(target, col).setRichTextValue(rtv); };
-  if (links['ukur_freon']) setRich(6, linkRich(u.freon, links['ukur_freon']));
-  setRich(7, pairRich(links, 'indoor'));
-  setRich(8, pairRich(links, 'kondensor'));
-  setRich(9, pairRich(links, 'evaporator'));
-  if (links['drainase']) setRich(10, linkRich(k.drainase, links['drainase']));
-  if (links['ukur_ampere']) setRich(11, linkRich(u.ampere, links['ukur_ampere']));
-  if (links['ukur_tegangan']) setRich(12, linkRich(u.tegangan, links['ukur_tegangan']));
+  if (L['ukur_freon']) setRich(6, linkRich(row[5], L['ukur_freon']));
+  setRich(7, pairRich(L, 'indoor'));
+  setRich(8, pairRich(L, 'kondensor'));
+  setRich(9, pairRich(L, 'evaporator'));
+  if (L['drainase']) setRich(10, linkRich(row[9], L['drainase']));
+  if (L['ukur_ampere']) setRich(11, linkRich(row[10], L['ukur_ampere']));
+  if (L['ukur_tegangan']) setRich(12, linkRich(row[11], L['ukur_tegangan']));
 
   sh.autoResizeColumns(2, COLS.length - 2);
   sh.setColumnWidth(1, 45);
   sh.setColumnWidth(COLS.length, 300);
 
-  saveFotoLinks(lokasi, u.ruangan, links); // simpan link foto biar review pasti kebaca
+  saveFotoLinks(lokasi, u.ruangan, mergedLinks); // simpan link foto (sudah merge)
   clearApproval(lokasi, u.ruangan); // upload baru → balik lagi buat di-review
   closeTickets(lokasi, u.ruangan); // upload ulang → tutup tiket revisi
   return { ok: true };

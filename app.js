@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v51'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v58'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -56,6 +56,16 @@ const UKUR_SLOTS = [
 const STEPS = ['Info Unit', 'Unit Indoor', 'Unit Outdoor', 'Hasil Ukur', 'Drainase', 'Penilaian', 'Simpan'];
 // Map item review (yg dicentang admin) → index step wizard, buat revisi terarah
 const REVIEW_TO_STEP = { info: 0, nametag: 0, indoor: 1, evaporator: 1, kondensor: 2, freon: 3, ampere: 3, tegangan: 3, drainase: 4, status: 5 };
+// Kebutuhan wajib per step (buat cek kelengkapan; revisi cuma cek step yg direvisi)
+const STEP_REQ = {
+  0: { fields: [['merk', 'Merk']], photos: [] },
+  1: { fields: [], photos: [['indoor_before', 'Foto Indoor before'], ['indoor_after', 'Foto Indoor after'], ['evaporator_before', 'Foto Evaporator before'], ['evaporator_after', 'Foto Evaporator after']] },
+  2: { fields: [], photos: [['kondensor_before', 'Foto Kondensor before'], ['kondensor_after', 'Foto Kondensor after']] },
+  3: { fields: [['freon', 'Freon'], ['ampere', 'Ampere'], ['tegangan', 'Tegangan']], photos: [['ukur_freon', 'Foto Freon'], ['ukur_ampere', 'Foto Ampere'], ['ukur_tegangan', 'Foto Tegangan']] },
+  4: { fields: [], photos: [['drainase', 'Foto Drainase']] },
+  5: { fields: [['teknisi1', 'Teknisi']], photos: [] },
+  6: { fields: [], photos: [] }
+};
 
 /* --------------------------- IndexedDB --------------------------------- */
 const DB_NAME = 'ac-service-db';
@@ -712,14 +722,29 @@ function renderWizard() {
     <div class="step">${renderStep(real)}</div>
     <div class="wizard-nav">
       ${pos > 0 ? '<button class="btn ghost" id="prevStep">‹ Sebelumnya</button>' : '<button class="btn ghost" id="prevMenu">‹ Sebelumnya</button>'}
-      ${pos < last ? '<button class="btn" id="nextStep">Lanjut ›</button>' : '<button class="btn ok" id="saveUnit">💾 Simpan</button>'}
+      ${pos < last ? '<button class="btn" id="nextStep">Lanjut ›</button>' : '<button class="btn ok" id="saveUnit">' + (state.reviseSteps ? '💾 Simpan & Kirim' : '💾 Simpan') + '</button>'}
     </div>`;
   bindStep(real);
   const nx = $('#nextStep'); if (nx) nx.onclick = async () => { collectStep(real); await persistCurrent(false); state.step++; renderWizard(); };
   const pv = $('#prevStep'); if (pv) pv.onclick = async () => { collectStep(real); await persistCurrent(false); state.step--; renderWizard(); };
   const pm = $('#prevMenu'); if (pm) pm.onclick = goBack;
   const del = $('#delUnit'); if (del) del.onclick = deleteCurrentUnit;
-  const sv = $('#saveUnit'); if (sv) sv.onclick = () => { collectStep(real); saveCurrentUnit(); };
+  const sv = $('#saveUnit'); if (sv) sv.onclick = () => { collectStep(real); state.reviseSteps ? saveAndUploadRevision() : saveCurrentUnit(); };
+}
+
+async function saveAndUploadRevision() {
+  const miss = missingItems(state.current);
+  if (miss.length) { toast('Lengkapi dulu: ' + miss.slice(0, 3).join(', '), 'bad'); return; }
+  await persistCurrent(true);
+  const u = state.units.find(x => x.id === state.current.id);
+  const btn = $('#saveUnit'); if (btn) { btn.disabled = true; btn.textContent = 'Mengirim…'; }
+  try {
+    await syncUnit(u, true); // merge: jaga data step lain
+    toast('Revisi terkirim ✓', 'ok');
+    state.reviseSteps = null;
+    show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); loadTickets();
+    renderHome();
+  } catch (e) { toast('Gagal upload: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = '💾 Simpan & Kirim'; } }
 }
 
 function h2(t) { return `<h2>${t}</h2>`; }
@@ -826,21 +851,14 @@ function summaryHTML() {
 
 // Daftar item yang masih kurang biar dianggap lengkap
 function missingItems(u) {
-  const m = [];
-  if (!u.merk) m.push('Merk');
-  if (u.freon === '') m.push('Freon');
-  if (u.ampere === '') m.push('Ampere');
-  if (u.tegangan === '') m.push('Tegangan');
-  if (!u.teknisi1) m.push('Teknisi');
-  const p = u.photos || {};
-  const labels = {
-    indoor_before: 'Foto Indoor before', indoor_after: 'Foto Indoor after',
-    evaporator_before: 'Foto Evaporator before', evaporator_after: 'Foto Evaporator after',
-    kondensor_before: 'Foto Kondensor before', kondensor_after: 'Foto Kondensor after',
-    ukur_freon: 'Foto Freon', ukur_ampere: 'Foto Ampere', ukur_tegangan: 'Foto Tegangan',
-    drainase: 'Foto Drainase'
-  };
-  requiredPhotoSlots().forEach(s => { if (!p[s]) m.push(labels[s] || s); });
+  // Revisi → cuma cek step yang direvisi. Servis normal → cek semua step data (0..5).
+  const steps = (state.reviseSteps && state.reviseSteps.length) ? state.reviseSteps : [0, 1, 2, 3, 4, 5];
+  const m = []; const p = u.photos || {};
+  steps.forEach(s => {
+    const req = STEP_REQ[s]; if (!req) return;
+    req.fields.forEach(f => { if (!String(u[f[0]] == null ? '' : u[f[0]]).trim()) m.push(f[1]); });
+    req.photos.forEach(ph => { if (!p[ph[0]]) m.push(ph[1]); });
+  });
   return m;
 }
 
@@ -967,7 +985,7 @@ async function syncAll() {
   else toast(`Upload selesai: ${ok} sukses${fail ? ', ' + fail + ' gagal' : ''}`, fail ? 'bad' : 'ok');
 }
 
-async function syncUnit(u) {
+async function syncUnit(u, merge) {
   const photos = {};
   for (const slot of Object.keys(u.photos || {})) {
     const d = await idbGet('photos', u.id + ':' + slot);
@@ -975,7 +993,7 @@ async function syncUnit(u) {
   }
   const payload = {
     project: state.settings.project,
-    jenis: 'maintenance', unit: sanitizeUnit(u), photos
+    jenis: 'maintenance', unit: sanitizeUnit(u), photos, merge: !!merge
   };
   const res = await fetch(state.settings.endpoint, {
     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
