@@ -47,6 +47,9 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Generate ikon & splash CoolCare
+        run: npx @capacitor/assets generate --android --iconBackgroundColor '#ffffff' --iconBackgroundColorDark '#0b1220' --splashBackgroundColor '#ffffff' --splashBackgroundColorDark '#0b1220'
+
       - name: Pasang kunci tetap (signing)
         run: |
           cp release.keystore android/app/release.keystore

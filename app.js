@@ -8,12 +8,14 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v41'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v46'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
 ];
-const REMIND_DAYS = 7; // jatuh tempo re-maintenance: 7 hari setelah servis
+const REMIND_DAYS = 7; // jatuh tempo re-maintenance (produksi)
+// MODE TES: kalau > 0, pakai MENIT (bukan hari). Balikin ke 0 buat produksi (pakai REMIND_DAYS).
+const REMIND_MINUTES = 2;
 // Merk AC yang umum di pasaran Indonesia (+ "Lainnya" untuk ketik manual)
 const MERK_OPTIONS = ['Panasonic', 'Daikin', 'LG', 'Sharp', 'Samsung', 'Gree', 'Midea', 'Polytron',
   'Changhong', 'Aqua (Haier)', 'Haier', 'Mitsubishi Electric', 'Mitsubishi Heavy', 'Toshiba',
@@ -185,13 +187,51 @@ function blankUnit() {
     photos: {}, // slot -> true
     maintainedAt: '', // ISO tanggal terakhir dikerjakan (di-stamp saat simpan)
     touched: false,   // sudah pernah dibuka/diisi (buat status "Progres")
+    ticketOpen: false, // tiket servis ulang aktif (progres dikosongin)
     synced: false, updatedAt: Date.now()
   };
 }
 
 function isMaintained(u) { return !!u.maintainedAt; }
-function isDue(u) { return isMaintained(u) && daysUntil(u.tglBerikutnya) <= 0; }
-function dueUnits() { return state.units.filter(isDue); }
+// Waktu jatuh tempo (ms epoch). Prioritas: dueAt (mode menit) → tglBerikutnya (tanggal).
+function dueTime(u) {
+  if (u.dueAt) return u.dueAt;
+  if (u.tglBerikutnya) return new Date(u.tglBerikutnya + 'T00:00:00').getTime();
+  return Infinity;
+}
+function isDue(u) { return isMaintained(u) && Date.now() >= dueTime(u); }
+function notDueYet(u) { return Date.now() < dueTime(u); } // masih di masa tunggu
+function dueUnits() { return state.units.filter(u => u.ticketOpen); } // tiket servis ulang aktif
+
+// Kosongkan semua progres unit → jadi tiket servis ulang fresh
+async function resetUnitForTicket(u) {
+  for (const slot of Object.keys(u.photos || {})) { try { await idbDel('photos', u.id + ':' + slot); } catch (e) {} }
+  u.photos = {};
+  u.kondisi = { indoor: '', kondensor: '', evaporator: '', drainase: '' };
+  u.freon = ''; u.ampere = ''; u.tegangan = '';
+  u.status = 'OK'; u.catatan = ''; u.teknisi1 = '';
+  u.maintainedAt = ''; u.tglServis = ''; u.tglBerikutnya = '';
+  u.dueAt = 0; u.synced = false; u.touched = false;
+  u.ticketOpen = true; u.updatedAt = Date.now();
+  await idbPut('units', u);
+}
+// User sudah lihat daftar → tiket "baru" jadi ruangan biasa (Belum) saat balik lagi
+function markSiteTicketsSeen() {
+  for (const u of siteUnits(state.currentSite)) {
+    if (u.ticketOpen) { u.ticketOpen = false; idbPut('units', u).catch(() => {}); }
+  }
+}
+
+// Unit yang sudah lewat jatuh tempo → buka tiket (kosongkan progres)
+async function processTickets() {
+  let changed = false;
+  for (const u of state.units) {
+    if (u.synced && u.maintainedAt && !u.ticketOpen && Date.now() >= dueTime(u)) {
+      await resetUnitForTicket(u); changed = true;
+    }
+  }
+  return changed;
+}
 
 // Slot foto yang wajib ada biar dianggap lengkap
 function requiredPhotoSlots() {
@@ -230,7 +270,7 @@ function show(view, opts = {}) {
   VIEWS.forEach(v => $('#view-' + v).classList.toggle('hidden', v !== view));
   const bar = $('#topbar'); if (bar) bar.classList.toggle('hidden', view === 'login');
   const setBtn = $('#settingsBtn');
-  const titles = { login: ['AC Service', ''], home: ['AC Service', 'Maintenance & Instalasi'], admin: ['Panel Admin', ''], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
+  const titles = { login: ['CoolCare', ''], home: ['CoolCare', 'Maintenance & Instalasi'], admin: ['Panel Admin', ''], sites: ['Maintenance', ''], list: ['Daftar Ruangan', ''], wizard: ['Servis Unit', ''], settings: ['Pengaturan', ''] };
   const ttl = titles[view] || ['', ''];
   $('#viewTitle').textContent = opts.title != null ? opts.title : ttl[0];
   $('#viewSub').textContent = opts.sub != null ? opts.sub : ttl[1];
@@ -244,7 +284,7 @@ function show(view, opts = {}) {
 
 function goBack() {
   if (state.view === 'wizard') { show('list', { title: 'Daftar Ruangan', sub: '' }); renderList($('#searchInput').value); }
-  else if (state.view === 'list') { show('sites'); renderSites(); }
+  else if (state.view === 'list') { markSiteTicketsSeen(); show('sites'); renderSites(); }
   else if (state.view === 'settings') { if (state.role === 'admin') { show('admin'); renderAdmin(); } else { show('home'); renderHome(); } }
   else { show('home'); renderHome(); }
 }
@@ -253,12 +293,12 @@ function goBack() {
 async function renderHome() {
   const done = state.units.filter(u => u.synced).length;
   const due = dueUnits().length;
-  $('#homeStat').textContent = `${state.units.length} unit terdaftar · ${done} ter-sync` + (due ? ` · 🔔 ${due} jatuh tempo` : '');
+  $('#homeStat').textContent = `${state.units.length} unit terdaftar · ${done} ter-sync` + (due ? ` · 🎫 ${due} tiket` : '');
   // badge di tile MAINTENANCE
   const tile = document.querySelector('.tile[data-go="maintenance"]');
   if (tile) {
     let b = tile.querySelector('.badge-due');
-    if (due) { if (!b) { b = document.createElement('span'); b.className = 'badge-due'; tile.appendChild(b); } b.textContent = `🔔 ${due}`; }
+    if (due) { if (!b) { b = document.createElement('span'); b.className = 'badge-due'; tile.appendChild(b); } b.textContent = `🎫 ${due}`; }
     else if (b) b.remove();
   }
   loadTickets();
@@ -420,10 +460,11 @@ function checkDueNotify(force) {
   if (!due.length) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const body = due.slice(0, 5).map(u => '• ' + (u.lokasi || 'Unit')).join('\n') + (due.length > 5 ? `\n…+${due.length - 5} lagi` : '');
-  const opts = { body, tag: 'ac-due', renotify: !!force, icon: './icons/icon-192.png', badge: './icons/icon-192.png' };
+  const opts = { body, tag: 'ac-ticket', renotify: !!force, icon: './icons/icon-192.png', badge: './icons/icon-192.png' };
+  const title = `🎫 ${due.length} tiket servis AC baru`;
   if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-    navigator.serviceWorker.ready.then(reg => reg.showNotification(`🔔 ${due.length} AC jatuh tempo maintenance`, opts)).catch(() => { try { new Notification(`🔔 ${due.length} AC jatuh tempo`, opts); } catch (e) {} });
-  } else { try { new Notification(`🔔 ${due.length} AC jatuh tempo`, opts); } catch (e) {} }
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opts)).catch(() => { try { new Notification(title, opts); } catch (e) {} });
+  } else { try { new Notification(title, opts); } catch (e) {} }
 }
 
 /* --------------------------- Site Picker ------------------------------- */
@@ -431,7 +472,7 @@ function renderSites() {
   const box = $('#siteList'); box.innerHTML = '';
   SITES.forEach(site => {
     const units = siteUnits(site);
-    const due = units.filter(isDue).length;
+    const due = units.filter(u => u.ticketOpen).length;
     const done = units.filter(u => isMaintained(u)).length;
     const el = document.createElement('div');
     el.className = 'unit';
@@ -439,9 +480,9 @@ function renderSites() {
       <div class="no">${SITE_ICON[site] || '📍'}</div>
       <div class="info">
         <h3>${esc(site)}</h3>
-        <p>${units.length} ruangan · ${done} dikerjakan${due ? ` · 🔔 ${due} jatuh tempo` : ''}</p>
+        <p>${units.length} ruangan · ${done} dikerjakan${due ? ` · 🎫 ${due} tiket` : ''}</p>
       </div>
-      ${due ? `<span class="pill due">🔔 ${due}</span>` : '<span class="pill todo">›</span>'}`;
+      ${due ? `<span class="pill ticket">🎫 ${due}</span>` : '<span class="pill todo">›</span>'}`;
     el.onclick = () => { state.currentSite = site; show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); };
     box.appendChild(el);
   });
@@ -455,15 +496,9 @@ function renderList(filter = '') {
   const inSite = siteUnits(state.currentSite);
   // Sembunyikan ruangan yang sudah di-upload & belum jatuh tempo.
   // Muncul lagi otomatis pas jatuh tempo (daysUntil <= 0).
-  const visible = inSite.filter(u => !(u.synced && daysUntil(u.tglBerikutnya) > 0));
+  const visible = inSite.filter(u => !(u.synced && notDueYet(u)));
 
-  // banner jatuh tempo (per lokasi)
-  const due = visible.filter(isDue);
-  const banner = $('#dueBanner');
-  if (banner) {
-    if (due.length) { banner.classList.remove('hidden'); banner.textContent = `🔔 ${due.length} ruangan jatuh tempo re-maintenance`; }
-    else banner.classList.add('hidden');
-  }
+  const banner = $('#dueBanner'); if (banner) banner.className = 'banner hidden'; // tiket cukup di baris ruangan
 
   // sugesti autocomplete berdasarkan nama ruangan yang tampil
   const sug = $('#searchSuggest');
@@ -480,7 +515,7 @@ function renderList(filter = '') {
     else {
       empty.classList.remove('hidden');
       empty.innerHTML = inSite.length && !q
-        ? `<span class="ic">✅</span>Semua ruangan sudah di-upload.<br>Muncul lagi otomatis pas jatuh tempo servis.`
+        ? `<span class="ic">✅</span>Semua ruangan sudah di-upload.<br>Muncul lagi otomatis sebagai tiket servis ulang.`
         : q ? `<span class="ic">🔍</span>Ruangan "${esc(q)}" nggak ketemu.`
           : `<span class="ic">📋</span>Belum ada ruangan. Tap + buat nambah.`;
     }
@@ -489,14 +524,18 @@ function renderList(filter = '') {
   items.forEach((u, idx) => {
     let pill;
     if (state.uploading.has(u.id)) pill = ['uploading', '<span class="spin"></span>Upload…'];
-    else if (isDue(u)) pill = ['due', '🔔 Jatuh tempo'];
     else if (isComplete(u)) pill = ['done', '✓ Selesai'];
     else if (isProgres(u)) pill = ['prog', 'Progres'];
+    else if (u.ticketOpen) pill = ['ticket', '🎫 Tiket baru'];
     else pill = ['todo', 'Belum'];
     let sub = '';
     if (isMaintained(u)) {
-      const d = daysUntil(u.tglBerikutnya);
-      sub = fmtDate(u.tglServis) + (d <= 0 ? ` · telat ${-d} hr` : ` · ulang ${d} hr lagi`);
+      const ms = dueTime(u) - Date.now();
+      let rem;
+      if (ms <= 0) rem = 'tiket baru';
+      else if (ms < 3600000) rem = `servis ulang ${Math.ceil(ms / 60000)} mnt lagi`;
+      else rem = `servis ulang ${Math.ceil(ms / 86400000)} hr lagi`;
+      sub = fmtDate(u.tglServis) + ' · ' + rem;
       if (u.merk) sub = esc(u.merk) + ' · ' + sub;
     }
     const el = document.createElement('div');
@@ -517,6 +556,7 @@ function renderList(filter = '') {
 async function openWizard(id) {
   const u = state.units.find(x => x.id === id);
   if (!u) return;
+  markSiteTicketsSeen(); // buka ruangan = udah lihat daftar → tiket lain jadi Belum
   state.current = JSON.parse(JSON.stringify(u));
   state.step = 0;
   // load foto ke cache
@@ -723,10 +763,11 @@ async function persistCurrent(markDone) {
   const u = state.current;
   u.touched = true;
   if (markDone) {
-    // Tanggal servis OTOMATIS = hari ini. Berikutnya = +REMIND_DAYS.
+    // Tanggal servis OTOMATIS = hari ini. Jatuh tempo: menit (mode tes) atau +REMIND_DAYS.
     u.tglServis = todayISO();
     u.maintainedAt = todayISO();
-    u.tglBerikutnya = addDaysISO(u.tglServis, REMIND_DAYS);
+    if (REMIND_MINUTES > 0) { u.dueAt = Date.now() + REMIND_MINUTES * 60000; u.tglBerikutnya = todayISO(); }
+    else { u.dueAt = 0; u.tglBerikutnya = addDaysISO(u.tglServis, REMIND_DAYS); }
     u.synced = false;
   }
   u.updatedAt = Date.now();
@@ -810,9 +851,9 @@ async function syncUnit(u) {
   });
   const out = await res.json().catch(() => ({}));
   if (!res.ok || out.ok === false) throw new Error(out.error || 'sync gagal');
-  u.synced = true; u.updatedAt = Date.now();
+  u.synced = true; u.ticketOpen = false; u.updatedAt = Date.now();
   await idbPut('units', u);
-  const idx = state.units.findIndex(x => x.id === u.id); if (idx >= 0) state.units[idx].synced = true;
+  const idx = state.units.findIndex(x => x.id === u.id); if (idx >= 0) { state.units[idx].synced = true; state.units[idx].ticketOpen = false; }
   return out;
 }
 
@@ -919,6 +960,14 @@ async function boot() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
-  setTimeout(() => checkDueNotify(false), 1500); // reminder jatuh tempo saat app dibuka
+  await processTickets(); // buka tiket buat unit yang lewat jatuh tempo
+  setTimeout(() => checkDueNotify(false), 1500); // reminder saat app dibuka
+  // auto-refresh: cek tiket baru + render ulang (penting buat mode tes menit)
+  setInterval(async () => {
+    const changed = await processTickets();
+    if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
+    else if (state.view === 'home') renderHome();
+    else if (changed && state.view === 'sites') renderSites();
+  }, 15000);
 }
 boot().catch(err => { document.body.innerHTML = '<div class="app"><p style="color:#f88">Gagal start: ' + esc(err.message) + '</p></div>'; });

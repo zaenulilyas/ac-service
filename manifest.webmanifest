@@ -1,7 +1,7 @@
 {
-  "name": "AC Service — Sukaregang",
-  "short_name": "AC Service",
-  "description": "Aplikasi maintenance & instalasi AC Split dengan panduan foto dan sync spreadsheet.",
+  "name": "CoolCare",
+  "short_name": "CoolCare",
+  "description": "CoolCare — Maintenance & Instalasi AC. Panduan foto, tiket servis, sync spreadsheet.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -1,6 +1,6 @@
 {
   "appId": "io.github.zaenulilyas.acservice",
-  "appName": "AC Service",
+  "appName": "CoolCare",
   "webDir": "www",
   "android": {
     "allowMixedContent": false

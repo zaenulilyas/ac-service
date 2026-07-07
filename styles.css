@@ -83,6 +83,9 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
 .pill.todo{background:rgba(142,160,192,.15);color:var(--mut)}
 .pill.synced{background:rgba(59,130,246,.15);color:#8fb8fb}
 .pill.due{background:rgba(239,68,68,.18);color:#f9a3a3}
+.pill.ticket{background:rgba(59,130,246,.18);color:#8fb8fb}
+.banner.ticket{background:rgba(59,130,246,.14);border:1px solid rgba(59,130,246,.4);color:#a9c8fb}
+.tile .badge-due{background:var(--acc)}
 .pill.uploading{background:rgba(59,130,246,.18);color:#8fb8fb}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.25);
   border-top-color:#8fb8fb;border-radius:50%;animation:spin .7s linear infinite;
