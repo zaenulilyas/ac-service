@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v58'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v59'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -307,16 +307,19 @@ function goBack() {
 /* ------------------------------ Home ----------------------------------- */
 async function renderHome() {
   const done = state.units.filter(u => u.synced).length;
-  const due = dueUnits().length;
-  $('#homeStat').textContent = `${state.units.length} unit terdaftar · ${done} ter-sync` + (due ? ` · 🎫 ${due} tiket` : '');
-  // badge di tile MAINTENANCE
-  const tile = document.querySelector('.tile[data-go="maintenance"]');
-  if (tile) {
-    let b = tile.querySelector('.badge-due');
-    if (due) { if (!b) { b = document.createElement('span'); b.className = 'badge-due'; tile.appendChild(b); } b.textContent = `🎫 ${due}`; }
-    else if (b) b.remove();
-  }
+  $('#homeStat').textContent = `${state.units.length} unit terdaftar · ${done} ter-sync`;
+  updateHomeBadge();
   loadTickets();
+}
+
+// Lonceng notif di tile MAINTENANCE = re-maintenance jatuh tempo + tiket admin (revisi/perbaikan)
+function updateHomeBadge() {
+  const tile = document.querySelector('.tile[data-go="maintenance"]');
+  if (!tile) return;
+  const n = dueUnits().length + (state.ticketMap ? Object.keys(state.ticketMap).length : 0);
+  let b = tile.querySelector('.badge-due');
+  if (n) { if (!b) { b = document.createElement('span'); b.className = 'badge-due'; tile.appendChild(b); } b.textContent = `🔔 ${n}`; }
+  else if (b) b.remove();
 }
 
 /* ------------------------------ Auth ----------------------------------- */
@@ -521,8 +524,7 @@ async function loadTickets() {
   try { const out = await apiPost({ action: 'tickets', teknisi: state.user }); tk = out.tickets || []; } catch (e) { return; }
   const map = {}; tk.forEach(t => { map[t.lokasi + '|' + t.ruangan] = t; });
   state.ticketMap = map;
-  const box = $('#ticketBox');
-  if (box) box.innerHTML = tk.length ? `<div class="banner ticket">🎫 ${tk.length} tiket dari admin — cek Daftar Ruangan</div>` : '';
+  updateHomeBadge();
   notifyTickets(tk);
   if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
 }
