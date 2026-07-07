@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v69'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v70'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -517,7 +517,12 @@ function renderReview() {
     const cb = $('#rv_' + it.key);
     if (cb) cb.onchange = () => {
       const n = $('#rvn_' + it.key); if (n) n.classList.toggle('hidden', !cb.checked);
-      const card = $('#revcard_' + it.key); if (card) card.classList.toggle('revise-on', cb.checked); // background merah pas ditandai revisi
+      const card = $('#revcard_' + it.key);
+      if (card) { // background merah pas ditandai revisi (inline style biar nggak gantung CSS cache)
+        card.classList.toggle('revise-on', cb.checked);
+        card.style.background = cb.checked ? 'rgba(239,68,68,.22)' : '';
+        card.style.borderColor = cb.checked ? 'rgba(239,68,68,.7)' : '';
+      }
     };
   });
   on('#reviewBack', 'onclick', () => { show('admin'); renderAdmin(); });
