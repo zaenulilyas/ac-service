@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v50'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v51'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -353,14 +353,13 @@ function renderAdmin() { loadRecords(); } // auto-muat daftar begitu panel admin
 
 async function addNewUser() {
   const user = ($('#nuUser').value || '').trim();
-  const name = ($('#nuName').value || '').trim();
   const pass = ($('#nuPass').value || '').trim();
-  if (!user || !name || !pass) { toast('Lengkapi username, nama, password', 'bad'); return; }
+  if (!user || !pass) { toast('Lengkapi username & password', 'bad'); return; }
   const btn = $('#addUserBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
   try {
-    await apiPost({ action: 'addUser', user, name, pass });
+    await apiPost({ action: 'addUser', user, name: user, pass });
     toast('Akun teknisi dibuat ✓', 'ok');
-    $('#nuUser').value = ''; $('#nuName').value = ''; $('#nuPass').value = '';
+    $('#nuUser').value = ''; $('#nuPass').value = '';
   } catch (e) { toast('Gagal: ' + e.message, 'bad'); }
   if (btn) { btn.disabled = false; btn.textContent = 'Buat Akun'; }
 }
