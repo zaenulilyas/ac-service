@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v69.3'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
+const APP_VERSION = 'v69.4'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -661,10 +661,19 @@ function isNativeApp() {
   return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 }
 const RELEASES_URL = 'https://github.com/zaenulilyas/ac-service/releases/latest';
+const APK_URL = 'https://github.com/zaenulilyas/ac-service/releases/download/apk-latest/AC-Service.apk';
 async function forceUpdate() {
   if (isNativeApp()) {
-    toast('Membuka halaman download APK terbaru…');
-    try { window.open(RELEASES_URL, '_blank'); } catch (e) { location.href = RELEASES_URL; }
+    // Coba plugin native (auto-download + langsung buka installer). Fallback: buka URL APK di browser → DownloadManager.
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdater) {
+        toast('Mengunduh APK terbaru…');
+        await window.Capacitor.Plugins.ApkUpdater.downloadAndInstall({ url: APK_URL });
+        return;
+      }
+    } catch (e) { /* fallback ke bawah */ }
+    toast('Mengunduh APK terbaru… cek notifikasi, lalu tap Install');
+    try { window.open(APK_URL, '_blank'); } catch (e) { location.href = APK_URL; }
     return;
   }
   toast('Cek versi terbaru…');
