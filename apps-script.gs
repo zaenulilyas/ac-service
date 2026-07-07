@@ -139,10 +139,23 @@ function apiAddUser(b) {
 }
 
 /* ---------- Records review (detail + link foto) ---------- */
+// Status tiket revisi terakhir per ruangan (buat pill panel admin: Review/Revisi/Complete)
+function revisiStatusMap() {
+  var sh = ensureRevisi();
+  var rows = sh.getDataRange().getValues();
+  var m = {};
+  for (var i = 1; i < rows.length; i++) {
+    if (!rows[i][1]) continue;
+    m[rows[i][1] + '|' + rows[i][2]] = { tipe: String(rows[i][4]), status: String(rows[i][6]) }; // baris terakhir = paling baru
+  }
+  return m;
+}
+
 function apiRecords(b) {
   var out = [];
   var fotoMap = loadFotoMap();
   var appr = approvedSet();
+  var revMap = revisiStatusMap();
   var sheets = ss().getSheets();
   for (var s = 0; s < sheets.length; s++) {
     var sh = sheets[s]; var name = sh.getName();
@@ -183,7 +196,8 @@ function apiRecords(b) {
         drainase: r[9], ampere: r[10], tegangan: r[11], status: r[12], teknisi: r[14], keterangan: r[15],
         fotoFreon: jl(['ukur_freon'], linksOf(5)), fotoDrainase: jl(['drainase'], linksOf(9)),
         fotoAmpere: jl(['ukur_ampere'], linksOf(10)), fotoTegangan: jl(['ukur_tegangan'], linksOf(11)),
-        fotoNametag: jl(['nametag'], [])
+        fotoNametag: jl(['nametag'], []),
+        revisi: revMap[name + '|' + r[1]] || null // {tipe,status} tiket revisi terakhir
       });
     }
   }

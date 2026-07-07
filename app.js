@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v66'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v67'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -439,10 +439,15 @@ async function loadRecords() {
         byLok[lok].sort((a, b) => (a.no || 0) - (b.no || 0)).forEach(r => {
           const el = document.createElement('div');
           el.className = 'unit';
+          // Status pill: revisi terkirim (open) → Revisi · teknisi sudah re-upload (done) → Complete · lainnya → Review
+          let rp;
+          if (r.revisi && r.revisi.status === 'open') rp = ['ticket', '🎫 Revisi'];
+          else if (r.revisi && r.revisi.status === 'done') rp = ['done', '✓ Complete'];
+          else rp = ['todo', 'Review ›'];
           el.innerHTML = `<div class="no">${esc(String(r.no || '-'))}</div>
             <div class="info"><h3>${esc(r.ruangan)}</h3>
             <p>${esc(r.merk || '—')} · ${esc(String(r.status || ''))} · ${esc(r.teknisi || '—')}</p></div>
-            <span class="pill todo">Review ›</span>`;
+            <span class="pill ${rp[0]}">${rp[1]}</span>`;
           el.onclick = () => openReview(r);
           box.appendChild(el);
         });
