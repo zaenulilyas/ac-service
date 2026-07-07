@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v62'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v63'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -363,7 +363,11 @@ function setAuth(a) {
 }
 function enterApp() {
   if (state.role === 'admin') { show('admin'); renderAdmin(); }
-  else { show('home'); renderHome(); }
+  else {
+    // pulihin cache tiket dulu biar pill revisi langsung kelihatan (loadTickets refresh di background)
+    try { state.ticketMap = JSON.parse(localStorage.getItem('acTickets') || '{}') || {}; } catch (e) { state.ticketMap = {}; }
+    show('home'); renderHome();
+  }
 }
 function doLogout() {
   if (!confirm('Keluar dari akun?')) return;
@@ -538,6 +542,7 @@ async function loadTickets() {
   try { const out = await apiPost({ action: 'tickets', teknisi: state.user }); tk = out.tickets || []; } catch (e) { return; }
   const map = {}; tk.forEach(t => { map[t.lokasi + '|' + t.ruangan] = t; });
   state.ticketMap = map;
+  try { localStorage.setItem('acTickets', JSON.stringify(map)); } catch (e) {} // cache biar pill langsung tampil pas app dibuka
   updateHomeBadge();
   notifyTickets(tk);
   if (state.view === 'list') { const q = $('#searchInput'); renderList(q ? q.value : ''); }
@@ -675,10 +680,17 @@ function renderList(filter = '') {
     const tk = ticketOf(u);
     let pill;
     if (state.uploading.has(u.id)) pill = ['uploading', '<span class="spin"></span>Upload…'];
-    else if (tk && u.synced) pill = (tk.tipe === 'perbaikan') ? ['due', '🔧 Perbaikan'] : ['ticket', '🎫 Revisi']; // tiket belum dikerjakan
-    else if (isComplete(u)) pill = ['done', '✓ Selesai']; // termasuk revisi yg sudah dikerjakan (nunggu upload)
+    else if (tk) {
+      const worked = !u.synced; // ada kerjaan baru sejak tiket (belum di-upload)
+      if (!worked) pill = (tk.tipe === 'perbaikan') ? ['due', '🔧 Perbaikan'] : ['ticket', '🎫 Revisi']; // tiket belum dikerjakan
+      else {
+        // sudah dikerjakan: revisi cek item yg ditandai; perbaikan cek unit penuh
+        const done = (tk.tipe === 'revisi') ? ticketMissing(u, tk).length === 0 : isComplete(u);
+        pill = done ? ['done', '✓ Selesai'] : ['prog', 'Progres'];
+      }
+    }
+    else if (isComplete(u)) pill = ['done', '✓ Selesai'];
     else if (isProgres(u)) pill = ['prog', 'Progres'];
-    else if (tk) pill = (tk.tipe === 'perbaikan') ? ['due', '🔧 Perbaikan'] : ['ticket', '🎫 Revisi'];
     else if (u.ticketOpen) pill = ['ticket', '🎫 Tiket baru'];
     else pill = ['todo', 'Belum'];
     let sub = '';
@@ -889,6 +901,18 @@ function missingItems(u) {
     // Servis normal → cek semua step data (0..5)
     [0, 1, 2, 3, 4, 5].forEach(s => check(STEP_REQ[s]));
   }
+  return m;
+}
+
+// Cek kelengkapan REVISI (buat status pill di daftar ruangan) berdasar item yg dicentang admin
+function ticketMissing(u, tk) {
+  if (!tk || tk.tipe !== 'revisi' || !tk.steps || !tk.steps.length) return [];
+  const m = []; const p = u.photos || {};
+  tk.steps.forEach(k => {
+    const req = KEY_REQ[k]; if (!req) return;
+    req.fields.forEach(f => { if (!String(u[f[0]] == null ? '' : u[f[0]]).trim()) m.push(f[1]); });
+    req.photos.forEach(ph => { if (!p[ph[0]]) m.push(ph[1]); });
+  });
   return m;
 }
 
