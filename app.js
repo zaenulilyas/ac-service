@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v67'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v68'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -498,7 +498,7 @@ function renderReview() {
     </div>
     <p class="note" style="margin:-4px 0 10px">Centang step yang perlu revisi + isi catatannya. Nanti dikirim sekaligus.</p>
     ${REVIEW_ITEMS.map(it => `
-      <div class="card">
+      <div class="card" id="revcard_${it.key}">
         <div class="cap" style="margin-bottom:6px"><b>${esc(it.label)}</b>${it.val ? ` — ${esc(it.val(r))}` : ''}</div>
         ${it.photos ? `<div style="margin-bottom:8px">${photoThumbs(it.photos(r))}</div>` : ''}
         <label class="rev-check"><input type="checkbox" id="rv_${it.key}"> Perlu revisi</label>
@@ -513,7 +513,10 @@ function renderReview() {
   // toggle catatan saat centang
   REVIEW_ITEMS.forEach(it => {
     const cb = $('#rv_' + it.key);
-    if (cb) cb.onchange = () => { const n = $('#rvn_' + it.key); if (n) n.classList.toggle('hidden', !cb.checked); };
+    if (cb) cb.onchange = () => {
+      const n = $('#rvn_' + it.key); if (n) n.classList.toggle('hidden', !cb.checked);
+      const card = $('#revcard_' + it.key); if (card) card.classList.toggle('revise-on', cb.checked); // background merah pas ditandai revisi
+    };
   });
   on('#reviewBack', 'onclick', () => { show('admin'); renderAdmin(); });
   on('#approveBtn', 'onclick', approveUnit);
