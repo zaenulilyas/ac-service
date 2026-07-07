@@ -442,19 +442,31 @@ function renderReview() {
         <label class="rev-check"><input type="checkbox" id="rv_${it.key}"> Perlu revisi</label>
         <input id="rvn_${it.key}" class="hidden" style="margin-top:8px" placeholder="Catatan revisi ${esc(it.label)}…">
       </div>`).join('')}
-    <div class="wizard-nav">
+    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn ok" id="approveBtn">✓ Approve (Terima Hasil)</button>
+      <button class="btn" id="sendRevisiBtn">📨 Kirim Revisi</button>
+      <button class="btn danger" id="tiketPerbaikanBtn">🔧 Buat Tiket Perbaikan Unit</button>
       <button class="btn ghost" id="reviewBack">‹ Kembali</button>
-      <button class="btn ok" id="sendRevisiBtn">📨 Kirim Revisi</button>
-    </div>
-    <button class="btn danger sm" id="tiketPerbaikanBtn" style="width:100%;margin-top:10px">🔧 Buat Tiket Perbaikan Unit</button>`;
+    </div>`;
   // toggle catatan saat centang
   REVIEW_ITEMS.forEach(it => {
     const cb = $('#rv_' + it.key);
     if (cb) cb.onchange = () => { const n = $('#rvn_' + it.key); if (n) n.classList.toggle('hidden', !cb.checked); };
   });
   on('#reviewBack', 'onclick', () => { show('admin'); renderAdmin(); });
+  on('#approveBtn', 'onclick', approveUnit);
   on('#sendRevisiBtn', 'onclick', sendRevisi);
   on('#tiketPerbaikanBtn', 'onclick', sendPerbaikan);
+}
+
+async function approveUnit() {
+  const r = state.reviewRec;
+  const btn = $('#approveBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
+  try {
+    await apiPost({ action: 'approve', lokasi: r.lokasi, ruangan: r.ruangan, by: state.user });
+    toast('Disetujui ✓ — hilang dari daftar', 'ok');
+    show('admin'); renderAdmin();
+  } catch (e) { toast('Gagal: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = '✓ Approve (Terima Hasil)'; } }
 }
 
 async function sendRevisi() {

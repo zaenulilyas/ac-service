@@ -12,7 +12,8 @@ var USERS_COLS = ['Username', 'Password', 'Nama', 'Role'];
 var REVISI_SHEET = 'Revisi';
 var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Tipe', 'Catatan', 'Status'];
 var FOTO_SHEET = 'FotoLinks';
-var SKIP_SHEETS = { 'Users': 1, 'Revisi': 1, 'Maintenance': 1, 'Sheet1': 1, 'FotoLinks': 1 };
+var APPROVED_SHEET = 'Approved';
+var SKIP_SHEETS = { 'Users': 1, 'Revisi': 1, 'Maintenance': 1, 'Sheet1': 1, 'FotoLinks': 1, 'Approved': 1 };
 
 function setup() {
   getFolder(); ensureUsers(); ensureRevisi();
@@ -35,6 +36,38 @@ function saveFotoLinks(lokasi, ruangan, links) {
   }
   sh.appendRow([lokasi, ruangan, json]);
 }
+// Approve: unit yang udah diterima admin → hilang dari daftar review
+function ensureApproved() {
+  var sh = ss().getSheetByName(APPROVED_SHEET);
+  if (!sh) { sh = ss().insertSheet(APPROVED_SHEET); sh.appendRow(['Lokasi', 'Ruangan', 'Status', 'By', 'Waktu']); }
+  return sh;
+}
+function setApproval(lokasi, ruangan, status, by) {
+  var sh = ensureApproved(); var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === lokasi && rows[i][1] === ruangan) {
+      sh.getRange(i + 1, 3).setValue(status); sh.getRange(i + 1, 4).setValue(by || ''); sh.getRange(i + 1, 5).setValue(new Date()); return;
+    }
+  }
+  sh.appendRow([lokasi, ruangan, status, by || '', new Date()]);
+}
+function clearApproval(lokasi, ruangan) {
+  var sh = ss().getSheetByName(APPROVED_SHEET); if (!sh) return;
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) { if (rows[i][0] === lokasi && rows[i][1] === ruangan) { sh.getRange(i + 1, 3).setValue(''); return; } }
+}
+function approvedSet() {
+  var s = {}; var sh = ss().getSheetByName(APPROVED_SHEET); if (!sh) return s;
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) { if (String(rows[i][2]) === 'approved') s[rows[i][0] + '|' + rows[i][1]] = 1; }
+  return s;
+}
+function apiApprove(b) {
+  if (!b.lokasi || !b.ruangan) return { ok: false, error: 'lokasi/ruangan kosong' };
+  setApproval(b.lokasi, b.ruangan, 'approved', b.by || '');
+  return { ok: true };
+}
+
 function loadFotoMap() {
   var map = {};
   var sh = ss().getSheetByName(FOTO_SHEET);
@@ -73,6 +106,7 @@ function doPost(e) {
     if (action === 'records') return json(apiRecords(body));
     if (action === 'revisi') return json(apiRevisi(body));
     if (action === 'tickets') return json(apiTickets(body));
+    if (action === 'approve') return json(apiApprove(body));
     return json(apiService(body));
   } catch (err) {
     return json({ ok: false, error: String(err) });
@@ -107,6 +141,7 @@ function apiAddUser(b) {
 function apiRecords(b) {
   var out = [];
   var fotoMap = loadFotoMap();
+  var appr = approvedSet();
   var sheets = ss().getSheets();
   for (var s = 0; s < sheets.length; s++) {
     var sh = sheets[s]; var name = sh.getName();
@@ -122,6 +157,7 @@ function apiRecords(b) {
     for (var i = 0; i < n; i++) {
       var r = vals[i];
       if (!r[1]) continue;
+      if (appr[name + '|' + r[1]]) continue; // sudah di-approve → sembunyikan
       var linksOf = function (col0) {
         var urls = [];
         var rt = rich[i][col0];
@@ -275,6 +311,7 @@ function apiService(body) {
   sh.setColumnWidth(COLS.length, 300);
 
   saveFotoLinks(lokasi, u.ruangan, links); // simpan link foto biar review pasti kebaca
+  clearApproval(lokasi, u.ruangan); // upload baru → balik lagi buat di-review
   closeTickets(lokasi, u.ruangan); // upload ulang → tutup tiket revisi
   return { ok: true };
 }
