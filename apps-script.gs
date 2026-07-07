@@ -91,15 +91,25 @@ function apiRecords(b) {
     var last = sh.getLastRow();
     if (last < DATA_ROW) continue;
     var n = last - DATA_ROW + 1;
-    var vals = sh.getRange(DATA_ROW, 1, n, COLS.length).getValues();
-    var rich = sh.getRange(DATA_ROW, 1, n, COLS.length).getRichTextValues();
+    var rng = sh.getRange(DATA_ROW, 1, n, COLS.length);
+    var vals = rng.getValues();
+    var rich = rng.getRichTextValues();
+    var formulas = rng.getFormulas();
     for (var i = 0; i < n; i++) {
       var r = vals[i];
       if (!r[1]) continue;
       var linksOf = function (col0) {
-        var rt = rich[i][col0]; if (!rt) return [];
-        var runs = rt.getRuns(); var urls = [];
-        for (var j = 0; j < runs.length; j++) { var u = runs[j].getLinkUrl(); if (u) urls.push(u); }
+        var urls = [];
+        var rt = rich[i][col0];
+        if (rt) {
+          var whole = rt.getLinkUrl();               // sel yg seluruhnya 1 link (mis. angka Freon)
+          if (whole) urls.push(whole);
+          else { var runs = rt.getRuns(); for (var j = 0; j < runs.length; j++) { var u = runs[j].getLinkUrl(); if (u) urls.push(u); } }
+        }
+        if (!urls.length) {                          // fallback: formula =HYPERLINK("url",...)
+          var f = formulas[i][col0];
+          if (f) { var re = /HYPERLINK\("([^"]+)"/gi, m; while ((m = re.exec(f))) urls.push(m[1]); }
+        }
         return urls;
       };
       out.push({
