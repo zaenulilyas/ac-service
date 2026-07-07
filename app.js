@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v69.4'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
+const APP_VERSION = 'v69.5'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -692,11 +692,13 @@ async function forceUpdate() {
 }
 
 /* --------------------------- Notifikasi -------------------------------- */
-async function enableNotif() {
-  if (!('Notification' in window)) { toast('HP/browser ini nggak dukung notifikasi', 'bad'); return; }
-  const perm = await Notification.requestPermission();
-  if (perm === 'granted') { toast('Notifikasi aktif ✓', 'ok'); checkDueNotify(true); }
-  else toast('Izin notifikasi ditolak', 'bad');
+// Otomatis nyalain notifikasi pas app pertama dibuka (install/update). Cuma minta izin sekali.
+async function autoEnableNotif() {
+  try {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission === 'granted') checkDueNotify(false);
+  } catch (e) {}
 }
 
 function checkDueNotify(force) {
@@ -1240,7 +1242,6 @@ function wire() {
   on('#saveSettingsBtn', 'onclick', saveSettings);
   on('#testConnBtn', 'onclick', testConnection);
   on('#wipeBtn', 'onclick', wipeAll);
-  on('#notifBtn', 'onclick', enableNotif);
   on('#updateBtn', 'onclick', forceUpdate);
   on('#loginBtn', 'onclick', doLogin);
   on('#logoutBtn', 'onclick', doLogout);
@@ -1273,6 +1274,7 @@ async function boot() {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
   await processTickets(); // buka tiket buat unit yang lewat jatuh tempo
+  setTimeout(autoEnableNotif, 1200); // notifikasi otomatis nyala pas app dibuka (install/update)
   setTimeout(() => checkDueNotify(false), 1500); // reminder saat app dibuka
   // auto-refresh: cek tiket baru + render ulang (penting buat mode tes menit)
   setInterval(async () => {
