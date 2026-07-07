@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v48'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v49'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -399,6 +399,7 @@ async function loadRecords() {
 /* --- Review detail per unit (admin) --- */
 const REVIEW_ITEMS = [
   { key: 'info', label: 'Info Unit', val: r => `${r.merk || '—'} · ${r.pk || '—'} PK` },
+  { key: 'nametag', label: 'Name Tag / Nameplate', photos: r => r.fotoNametag },
   { key: 'indoor', label: 'Indoor (before/after)', photos: r => r.indoor },
   { key: 'evaporator', label: 'Evaporator (before/after)', photos: r => r.evaporator },
   { key: 'kondensor', label: 'Kondensor (before/after)', photos: r => r.kondensor },

@@ -11,7 +11,8 @@ var USERS_SHEET = 'Users';
 var USERS_COLS = ['Username', 'Password', 'Nama', 'Role'];
 var REVISI_SHEET = 'Revisi';
 var REVISI_COLS = ['Timestamp', 'Lokasi', 'Ruangan', 'Teknisi', 'Tipe', 'Catatan', 'Status'];
-var SKIP_SHEETS = { 'Users': 1, 'Revisi': 1, 'Maintenance': 1, 'Sheet1': 1 };
+var FOTO_SHEET = 'FotoLinks';
+var SKIP_SHEETS = { 'Users': 1, 'Revisi': 1, 'Maintenance': 1, 'Sheet1': 1, 'FotoLinks': 1 };
 
 function setup() {
   getFolder(); ensureUsers(); ensureRevisi();
@@ -22,6 +23,28 @@ function getFolder() {
   return it.hasNext() ? it.next() : DriveApp.createFolder(DRIVE_FOLDER);
 }
 function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
+
+// Simpan semua link foto per ruangan ke tabel FotoLinks (biar review baca-nya pasti)
+function saveFotoLinks(lokasi, ruangan, links) {
+  var sh = ss().getSheetByName(FOTO_SHEET);
+  if (!sh) { sh = ss().insertSheet(FOTO_SHEET); sh.appendRow(['Lokasi', 'Ruangan', 'Links']); }
+  var json = JSON.stringify(links || {});
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === lokasi && rows[i][1] === ruangan) { sh.getRange(i + 1, 3).setValue(json); return; }
+  }
+  sh.appendRow([lokasi, ruangan, json]);
+}
+function loadFotoMap() {
+  var map = {};
+  var sh = ss().getSheetByName(FOTO_SHEET);
+  if (!sh) return map;
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    try { map[rows[i][0] + '|' + rows[i][1]] = JSON.parse(rows[i][2] || '{}'); } catch (e) {}
+  }
+  return map;
+}
 function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 function ensureUsers() {
@@ -83,6 +106,7 @@ function apiAddUser(b) {
 /* ---------- Records review (detail + link foto) ---------- */
 function apiRecords(b) {
   var out = [];
+  var fotoMap = loadFotoMap();
   var sheets = ss().getSheets();
   for (var s = 0; s < sheets.length; s++) {
     var sh = sheets[s]; var name = sh.getName();
@@ -112,11 +136,17 @@ function apiRecords(b) {
         }
         return urls;
       };
+      var L = fotoMap[name + '|' + r[1]] || {};
+      var jl = function (keys, fb) { var o = []; for (var x = 0; x < keys.length; x++) { if (L[keys[x]]) o.push(L[keys[x]]); } return o.length ? o : (fb || []); };
       out.push({
         lokasi: name, no: r[0], ruangan: r[1], tglServis: r[2], merk: r[3], pk: r[4],
-        freon: r[5], indoor: linksOf(6), kondensor: linksOf(7), evaporator: linksOf(8),
+        freon: r[5], indoor: jl(['indoor_before', 'indoor_after'], linksOf(6)),
+        kondensor: jl(['kondensor_before', 'kondensor_after'], linksOf(7)),
+        evaporator: jl(['evaporator_before', 'evaporator_after'], linksOf(8)),
         drainase: r[9], ampere: r[10], tegangan: r[11], status: r[12], teknisi: r[14], keterangan: r[15],
-        fotoFreon: linksOf(5), fotoDrainase: linksOf(9), fotoAmpere: linksOf(10), fotoTegangan: linksOf(11)
+        fotoFreon: jl(['ukur_freon'], linksOf(5)), fotoDrainase: jl(['drainase'], linksOf(9)),
+        fotoAmpere: jl(['ukur_ampere'], linksOf(10)), fotoTegangan: jl(['ukur_tegangan'], linksOf(11)),
+        fotoNametag: jl(['nametag'], [])
       });
     }
   }
@@ -244,6 +274,7 @@ function apiService(body) {
   sh.setColumnWidth(1, 45);
   sh.setColumnWidth(COLS.length, 300);
 
+  saveFotoLinks(lokasi, u.ruangan, links); // simpan link foto biar review pasti kebaca
   closeTickets(lokasi, u.ruangan); // upload ulang → tutup tiket revisi
   return { ok: true };
 }
