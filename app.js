@@ -8,14 +8,14 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v65'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v66'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
 ];
 const REMIND_DAYS = 7; // jatuh tempo re-maintenance (produksi)
 // MODE TES: kalau > 0, pakai MENIT (bukan hari). Balikin ke 0 buat produksi (pakai REMIND_DAYS).
-const REMIND_MINUTES = 2;
+const REMIND_MINUTES = 0;
 // Merk AC yang umum di pasaran Indonesia (+ "Lainnya" untuk ketik manual)
 const MERK_OPTIONS = ['Panasonic', 'Daikin', 'LG', 'Sharp', 'Samsung', 'Gree', 'Midea', 'Polytron',
   'Changhong', 'Aqua (Haier)', 'Haier', 'Mitsubishi Electric', 'Mitsubishi Heavy', 'Toshiba',
