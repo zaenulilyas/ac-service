@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v60'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v61'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -742,16 +742,17 @@ function renderWizard() {
     <div class="step">${renderStep(real)}</div>
     <div class="wizard-nav">
       ${pos > 0 ? '<button class="btn ghost" id="prevStep">‹ Sebelumnya</button>' : '<button class="btn ghost" id="prevMenu">‹ Sebelumnya</button>'}
-      ${pos < last ? '<button class="btn" id="nextStep">Lanjut ›</button>' : '<button class="btn ok" id="saveUnit">' + (state.reviseSteps ? '💾 Simpan & Kirim' : '💾 Simpan') + '</button>'}
+      ${pos < last ? '<button class="btn" id="nextStep">Lanjut ›</button>' : '<button class="btn ok" id="saveUnit">💾 Simpan</button>'}
     </div>`;
   bindStep(real);
   const nx = $('#nextStep'); if (nx) nx.onclick = async () => { collectStep(real); await persistCurrent(false); state.step++; renderWizard(); };
   const pv = $('#prevStep'); if (pv) pv.onclick = async () => { collectStep(real); await persistCurrent(false); state.step--; renderWizard(); };
   const pm = $('#prevMenu'); if (pm) pm.onclick = goBack;
   const del = $('#delUnit'); if (del) del.onclick = deleteCurrentUnit;
-  const sv = $('#saveUnit'); if (sv) sv.onclick = () => { collectStep(real); state.reviseSteps ? saveAndUploadRevision() : saveCurrentUnit(); };
+  const sv = $('#saveUnit'); if (sv) sv.onclick = () => { collectStep(real); saveCurrentUnit(); };
 }
 
+// (Tak dipakai lagi — revisi sekarang disimpan biasa lalu di-upload via tombol Upload di Daftar Ruangan)
 async function saveAndUploadRevision() {
   const miss = missingItems(state.current);
   if (miss.length) { toast('Lengkapi dulu: ' + miss.slice(0, 3).join(', '), 'bad'); return; }
@@ -957,7 +958,8 @@ async function persistCurrent(markDone) {
 
 async function saveCurrentUnit() {
   await persistCurrent(true);
-  toast('Tersimpan di HP', 'ok');
+  state.reviseSteps = null; state.reviseKeys = null; // keluar mode revisi
+  toast('Tersimpan di HP — tap ⤒ Upload buat kirim', 'ok');
   show('list', { title: 'Daftar Ruangan', sub: '' }); renderList($('#searchInput').value);
   renderHome();
 }
@@ -1003,7 +1005,8 @@ async function syncAll() {
   renderList($('#searchInput').value);
   let ok = 0, fail = 0;
   for (const u of ready) {
-    try { await syncUnit(u); ok++; } catch (e) { fail++; }
+    const t = ticketOf(u); const isRev = !!(t && t.tipe === 'revisi'); // upload revisi → merge biar data lain aman
+    try { await syncUnit(u, isRev); ok++; } catch (e) { fail++; }
     state.uploading.delete(u.id);
     renderList($('#searchInput').value);
   }
