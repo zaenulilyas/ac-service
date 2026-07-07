@@ -151,6 +151,8 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px}
   border:1px solid var(--line);border-radius:20px;padding:5px 10px;color:var(--mut)}
 .rev-thumb{display:inline-block;font-size:13px;color:#8fb8fb;background:var(--bg2);
   border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin:0 4px 4px 0;text-decoration:none}
+.rev-img{width:96px;height:72px;object-fit:cover;border-radius:8px;margin:0 6px 6px 0;
+  border:1px solid var(--line);background:var(--bg2);vertical-align:top}
 .rev-check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--txt);cursor:pointer}
 .rev-check input{width:auto}
 .fab{position:fixed;right:18px;bottom:20px;width:56px;height:56px;border-radius:50%;

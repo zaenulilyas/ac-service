@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v47'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v48'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -371,17 +371,27 @@ async function loadRecords() {
   try {
     const out = await apiPost({ action: 'records' });
     const recs = out.records || [];
-    box.innerHTML = recs.length ? '' : '<p class="note">Belum ada data terupload.</p>';
-    recs.forEach(r => {
-      const el = document.createElement('div');
-      el.className = 'unit';
-      el.innerHTML = `<div class="no">${esc(String(r.no || '-'))}</div>
-        <div class="info"><h3>${esc(r.ruangan)}</h3>
-        <p>${esc(r.lokasi)} · ${esc(r.merk || '—')} · ${esc(String(r.status || ''))} · ${esc(r.teknisi || '—')}</p></div>
-        <span class="pill todo">Review ›</span>`;
-      el.onclick = () => openReview(r);
-      box.appendChild(el);
-    });
+    if (!recs.length) { box.innerHTML = '<p class="note">Belum ada data terupload.</p>'; }
+    else {
+      box.innerHTML = '';
+      const byLok = {};
+      recs.forEach(r => { (byLok[r.lokasi] = byLok[r.lokasi] || []).push(r); });
+      Object.keys(byLok).sort().forEach(lok => {
+        const h = document.createElement('div'); h.className = 'sec-label';
+        h.textContent = (SITE_ICON[lok] || '📍') + ' ' + lok + ' (' + byLok[lok].length + ')';
+        box.appendChild(h);
+        byLok[lok].sort((a, b) => (a.no || 0) - (b.no || 0)).forEach(r => {
+          const el = document.createElement('div');
+          el.className = 'unit';
+          el.innerHTML = `<div class="no">${esc(String(r.no || '-'))}</div>
+            <div class="info"><h3>${esc(r.ruangan)}</h3>
+            <p>${esc(r.merk || '—')} · ${esc(String(r.status || ''))} · ${esc(r.teknisi || '—')}</p></div>
+            <span class="pill todo">Review ›</span>`;
+          el.onclick = () => openReview(r);
+          box.appendChild(el);
+        });
+      });
+    }
   } catch (e) { box.innerHTML = '<p class="note" style="color:#f9a3a3">Gagal muat: ' + esc(e.message) + '</p>'; }
   if (btn) { btn.disabled = false; btn.textContent = '🔄 Muat Data Terupload'; }
 }
@@ -401,9 +411,13 @@ const REVIEW_ITEMS = [
 
 function openReview(r) { state.reviewRec = r; show('review', { sub: r.lokasi + ' · ' + r.ruangan }); renderReview(); }
 
+function driveThumb(url) {
+  const m = String(url).match(/\/d\/([^/]+)/) || String(url).match(/[?&]id=([^&]+)/);
+  return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400` : url;
+}
 function photoThumbs(urls) {
   if (!urls || !urls.length) return '<span class="note">— tanpa foto —</span>';
-  return urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener" class="rev-thumb">🖼️ Foto</a>`).join(' ');
+  return urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img class="rev-img" loading="lazy" src="${esc(driveThumb(u))}" onerror="this.parentNode.innerHTML='<span class=&quot;rev-thumb&quot;>🖼️ Buka foto</span>'"></a>`).join('');
 }
 
 function renderReview() {
@@ -414,6 +428,7 @@ function renderReview() {
       <div class="kv"><span>Lokasi</span><span>${esc(r.lokasi)}</span></div>
       <div class="kv"><span>Teknisi</span><span>${esc(r.teknisi || '—')}</span></div>
       <div class="kv"><span>Tgl Servis</span><span>${esc(r.tglServis || '—')}</span></div>
+      <div class="kv"><span>Keterangan</span><span>${esc(r.keterangan || '—')}</span></div>
     </div>
     <p class="note" style="margin:-4px 0 10px">Centang step yang perlu revisi + isi catatannya. Nanti dikirim sekaligus.</p>
     ${REVIEW_ITEMS.map(it => `
