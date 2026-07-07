@@ -8,7 +8,7 @@
 /* ----------------------------- Config ---------------------------------- */
 const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
-const APP_VERSION = 'v59'; // dinaikin tiap update biar keliatan di Pengaturan
+const APP_VERSION = 'v60'; // dinaikin tiap update biar keliatan di Pengaturan
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
@@ -48,15 +48,28 @@ const OUTDOOR_PARTS = [
 const DRAINASE_SLOT = { key: 'drainase', label: 'Drainase / Pembuangan' };
 const NAMETAG_SLOT = { key: 'nametag', label: 'Name Tag / Nameplate Unit' };
 const UKUR_SLOTS = [
-  { key: 'ukur_freon', label: 'Manifold / Tekanan Freon' },
-  { key: 'ukur_ampere', label: 'Ampere (tang ampere)' },
-  { key: 'ukur_tegangan', label: 'Tegangan (multimeter)' }
+  { key: 'ukur_freon', label: 'Manifold / Tekanan Freon', field: 'freon', numLabel: 'Freon (psi)', ph: 'mis. 75' },
+  { key: 'ukur_ampere', label: 'Ampere (tang ampere)', field: 'ampere', numLabel: 'Ampere (A)', ph: 'mis. 3.2' },
+  { key: 'ukur_tegangan', label: 'Tegangan (multimeter)', field: 'tegangan', numLabel: 'Tegangan (V)', ph: 'mis. 220' }
 ];
 
 const STEPS = ['Info Unit', 'Unit Indoor', 'Unit Outdoor', 'Hasil Ukur', 'Drainase', 'Penilaian', 'Simpan'];
 // Map item review (yg dicentang admin) → index step wizard, buat revisi terarah
 const REVIEW_TO_STEP = { info: 0, nametag: 0, indoor: 1, evaporator: 1, kondensor: 2, freon: 3, ampere: 3, tegangan: 3, drainase: 4, status: 5 };
-// Kebutuhan wajib per step (buat cek kelengkapan; revisi cuma cek step yg direvisi)
+// Kebutuhan wajib PER-ITEM review (buat revisi terarah: cuma cek item yg dicentang admin)
+const KEY_REQ = {
+  info: { fields: [['merk', 'Merk']], photos: [] },
+  nametag: { fields: [], photos: [['nametag', 'Foto Name Tag']] },
+  indoor: { fields: [], photos: [['indoor_before', 'Foto Indoor before'], ['indoor_after', 'Foto Indoor after']] },
+  evaporator: { fields: [], photos: [['evaporator_before', 'Foto Evaporator before'], ['evaporator_after', 'Foto Evaporator after']] },
+  kondensor: { fields: [], photos: [['kondensor_before', 'Foto Kondensor before'], ['kondensor_after', 'Foto Kondensor after']] },
+  freon: { fields: [['freon', 'Freon']], photos: [['ukur_freon', 'Foto Freon']] },
+  ampere: { fields: [['ampere', 'Ampere']], photos: [['ukur_ampere', 'Foto Ampere']] },
+  tegangan: { fields: [['tegangan', 'Tegangan']], photos: [['ukur_tegangan', 'Foto Tegangan']] },
+  drainase: { fields: [], photos: [['drainase', 'Foto Drainase']] },
+  status: { fields: [['status', 'Status']], photos: [] }
+};
+// Kebutuhan wajib per step (buat cek kelengkapan servis normal)
 const STEP_REQ = {
   0: { fields: [['merk', 'Merk']], photos: [] },
   1: { fields: [], photos: [['indoor_before', 'Foto Indoor before'], ['indoor_after', 'Foto Indoor after'], ['evaporator_before', 'Foto Evaporator before'], ['evaporator_after', 'Foto Evaporator after']] },
@@ -115,6 +128,7 @@ const state = {
   current: null,     // unit sedang diedit di wizard
   step: 0,
   reviseSteps: null, // subset step (index STEPS) kalau buka dari tiket revisi; null = semua
+  reviseKeys: null,  // subset item review (freon/indoor/...) yg dicentang admin; null = semua
   ticketMap: {},     // 'lokasi|ruangan' -> tiket revisi/perbaikan (dari admin)
   notifiedTickets: new Set(), // tiket yg sudah dinotif (biar gak spam)
   uploading: new Set(), // id unit yang lagi di-upload (buat spinner)
@@ -546,14 +560,15 @@ function openTicket(t) {
   const u = state.units.find(x => x.lokasi === t.lokasi && x.ruangan === t.ruangan);
   if (!u) { toast('Ruangan ' + t.ruangan + ' belum ada di HP ini', 'bad'); return; }
   state.currentSite = t.lokasi;
-  let rev = null;
+  let rev = null, keys = null;
   if (t.tipe === 'revisi' && t.steps && t.steps.length) {
+    keys = t.steps.slice();
     const set = new Set();
-    t.steps.forEach(k => { const s = REVIEW_TO_STEP[k]; if (s != null) set.add(s); });
+    keys.forEach(k => { const s = REVIEW_TO_STEP[k]; if (s != null) set.add(s); });
     set.add(STEPS.length - 1); // selalu sertakan Ringkasan/Simpan
     rev = Array.from(set).sort((a, b) => a - b);
   }
-  openWizard(u.id, rev);
+  openWizard(u.id, rev, keys);
 }
 
 /* ----------------------------- Update ---------------------------------- */
@@ -691,11 +706,12 @@ function renderList(filter = '') {
 }
 
 /* ----------------------------- Wizard ---------------------------------- */
-async function openWizard(id, reviseSteps) {
+async function openWizard(id, reviseSteps, reviseKeys) {
   const u = state.units.find(x => x.id === id);
   if (!u) return;
   markSiteTicketsSeen(); // buka ruangan = udah lihat daftar → tiket lain jadi Belum
   state.reviseSteps = (reviseSteps && reviseSteps.length) ? reviseSteps : null;
+  state.reviseKeys = (reviseKeys && reviseKeys.length) ? reviseKeys : null;
   state.current = JSON.parse(JSON.stringify(u));
   state.step = 0;
   // load foto ke cache
@@ -709,6 +725,8 @@ async function openWizard(id, reviseSteps) {
 }
 
 function activeSteps() { return (state.reviseSteps && state.reviseSteps.length) ? state.reviseSteps : STEPS.map((_, k) => k); }
+// Revisi terarah: item cuma ditampilkan kalau dicentang admin (null = semua, servis normal)
+function keyActive(k) { return !state.reviseKeys || state.reviseKeys.indexOf(k) !== -1; }
 
 function renderWizard() {
   const steps = activeSteps();
@@ -743,7 +761,7 @@ async function saveAndUploadRevision() {
   try {
     await syncUnit(u, true); // merge: jaga data step lain
     toast('Revisi terkirim ✓', 'ok');
-    state.reviseSteps = null;
+    state.reviseSteps = null; state.reviseKeys = null;
     show('list', { title: 'Daftar Ruangan', sub: '' }); renderList(); loadTickets();
     renderHome();
   } catch (e) { toast('Gagal upload: ' + e.message, 'bad'); if (btn) { btn.disabled = false; btn.textContent = '💾 Simpan & Kirim'; } }
@@ -754,34 +772,37 @@ function h2(t) { return `<h2>${t}</h2>`; }
 function renderStep(i) {
   const u = state.current;
   switch (i) {
-    case 0: return h2('📋 Info Unit') + `
-      <div class="card">
-        <div class="field"><label>Lokasi</label><div class="chip">${SITE_ICON[u.lokasi] || '📍'} ${esc(u.lokasi || '—')}</div></div>
-        <div class="field"><label>Ruangan</label><div class="chip">🚪 ${esc(u.ruangan || '—')}</div></div>
+    case 0: {
+      const infoFields = keyActive('info') ? `
         <div class="grid2">
           <div class="field"><label>Merk</label>${merkSelectHTML(u.merk)}</div>
           <div class="field"><label>PK</label>${selectHTML('f_pk', PK_OPTIONS, u.pk)}</div>
         </div>
         <div class="field ${MERK_OPTIONS.includes(u.merk) || !u.merk ? 'hidden' : ''}" id="merkOtherWrap">
           <label>Merk lain</label><input id="f_merk_other" value="${MERK_OPTIONS.includes(u.merk) ? '' : esc(u.merk)}" placeholder="Tulis merk…">
-        </div>
-      </div>` + slotHTML(NAMETAG_SLOT);
+        </div>` : '';
+      return h2('📋 Info Unit') + `
+      <div class="card">
+        <div class="field"><label>Lokasi</label><div class="chip">${SITE_ICON[u.lokasi] || '📍'} ${esc(u.lokasi || '—')}</div></div>
+        <div class="field"><label>Ruangan</label><div class="chip">🚪 ${esc(u.ruangan || '—')}</div></div>
+        ${infoFields}
+      </div>` + (keyActive('nametag') ? slotHTML(NAMETAG_SLOT) : '');
+    }
     case 1: return h2('❄️ Unit Indoor') +
       `<p class="note" style="margin:-6px 0 14px">Kerjakan indoor sampai selesai — foto <b>sebelum</b>, cuci, lalu foto <b>sesudah</b>. Baru nanti pindah ke outdoor.</p>` +
-      INDOOR_PARTS.map(photoPairHTML).join('');
+      INDOOR_PARTS.filter(p => keyActive(p.key)).map(photoPairHTML).join('');
     case 2: return h2('🌡️ Unit Outdoor (Kondensor)') +
       `<p class="note" style="margin:-6px 0 14px">Sekarang pindah ke unit outdoor. Foto <b>sebelum</b> & <b>sesudah</b> cleaning kondensor.</p>` +
       OUTDOOR_PARTS.map(photoPairHTML).join('');
-    case 3: return h2('🔢 Hasil Ukur') +
-      `<p class="note" style="margin:-6px 0 14px">Foto alat ukur dulu, baru isi angkanya di bawah.</p>` +
-      UKUR_SLOTS.map(slotHTML).join('') + `
-      <div class="card">
-        <div class="grid2">
-          <div class="field"><label>Freon (psi)</label><input type="number" inputmode="decimal" id="f_freon" value="${esc(u.freon)}" placeholder="mis. 75"></div>
-          <div class="field"><label>Ampere (A)</label><input type="number" inputmode="decimal" id="f_ampere" value="${esc(u.ampere)}" placeholder="mis. 3.2"></div>
-        </div>
-        <div class="field"><label>Tegangan (V)</label><input type="number" inputmode="decimal" id="f_tegangan" value="${esc(u.tegangan)}" placeholder="mis. 220"></div>
-      </div>`;
+    case 3: {
+      const act = UKUR_SLOTS.filter(x => keyActive(x.field));
+      return h2('🔢 Hasil Ukur') +
+        `<p class="note" style="margin:-6px 0 14px">Foto alat ukur dulu, baru isi angkanya di bawah.</p>` +
+        act.map(slotHTML).join('') +
+        `<div class="card">` + act.map(x =>
+          `<div class="field"><label>${esc(x.numLabel)}</label><input type="number" inputmode="decimal" id="f_${x.field}" value="${esc(u[x.field])}" placeholder="${esc(x.ph)}"></div>`
+        ).join('') + `</div>`;
+    }
     case 4: return h2('💧 Drainase') +
       `<p class="note" style="margin:-6px 0 14px">Foto saluran pembuangan dulu, baru isi kondisinya.</p>` +
       slotHTML(DRAINASE_SLOT) +
@@ -853,14 +874,19 @@ function summaryHTML() {
 
 // Daftar item yang masih kurang biar dianggap lengkap
 function missingItems(u) {
-  // Revisi → cuma cek step yang direvisi. Servis normal → cek semua step data (0..5).
-  const steps = (state.reviseSteps && state.reviseSteps.length) ? state.reviseSteps : [0, 1, 2, 3, 4, 5];
   const m = []; const p = u.photos || {};
-  steps.forEach(s => {
-    const req = STEP_REQ[s]; if (!req) return;
+  const check = (req) => {
+    if (!req) return;
     req.fields.forEach(f => { if (!String(u[f[0]] == null ? '' : u[f[0]]).trim()) m.push(f[1]); });
     req.photos.forEach(ph => { if (!p[ph[0]]) m.push(ph[1]); });
-  });
+  };
+  if (state.reviseKeys && state.reviseKeys.length) {
+    // Revisi terarah → cuma cek item yang dicentang admin (freon/indoor/…)
+    state.reviseKeys.forEach(k => check(KEY_REQ[k]));
+  } else {
+    // Servis normal → cek semua step data (0..5)
+    [0, 1, 2, 3, 4, 5].forEach(s => check(STEP_REQ[s]));
+  }
   return m;
 }
 
