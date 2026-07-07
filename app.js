@@ -411,14 +411,18 @@ const REVIEW_ITEMS = [
 
 function openReview(r) { state.reviewRec = r; show('review', { sub: r.lokasi + ' · ' + r.ruangan }); renderReview(); }
 
-function driveThumb(url) {
+function driveId(url) {
   const m = String(url).match(/\/d\/([^/]+)/) || String(url).match(/[?&]id=([^&]+)/);
-  return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400` : url;
+  return m ? m[1] : null;
 }
+function driveThumb(url) { const id = driveId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : url; }
+function driveBig(url) { const id = driveId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url; }
 function photoThumbs(urls) {
   if (!urls || !urls.length) return '<span class="note">— tanpa foto —</span>';
-  return urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img class="rev-img" loading="lazy" src="${esc(driveThumb(u))}" onerror="this.parentNode.innerHTML='<span class=&quot;rev-thumb&quot;>🖼️ Buka foto</span>'"></a>`).join('');
+  return urls.map(u => `<img class="rev-img" loading="lazy" src="${esc(driveThumb(u))}" data-full="${esc(driveBig(u))}" onclick="openLightbox(this.dataset.full)" onerror="this.classList.add('rev-fail')">`).join('');
 }
+function openLightbox(src) { const lb = $('#lightbox'), im = $('#lightboxImg'); if (!lb || !im) return; im.src = src; lb.classList.remove('hidden'); }
+function closeLightbox() { const lb = $('#lightbox'); if (lb) lb.classList.add('hidden'); const im = $('#lightboxImg'); if (im) im.src = ''; }
 
 function renderReview() {
   const r = state.reviewRec; const wrap = $('#view-review');
@@ -1027,6 +1031,9 @@ function wire() {
   on('#addUserBtn', 'onclick', addNewUser);
   on('#loadRecordsBtn', 'onclick', loadRecords);
   const lp = $('#loginPass'); if (lp) lp.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
+  on('#lightboxClose', 'onclick', closeLightbox);
+  const lb = $('#lightbox'); if (lb) lb.onclick = (e) => { if (e.target.id === 'lightbox') closeLightbox(); };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
 }
 
 /* ------------------------------ Boot ----------------------------------- */
