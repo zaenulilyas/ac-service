@@ -47,6 +47,9 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Kunci ukuran teks (abaikan font-scale sistem)
+        run: python3 ci/patch-fontlock.py
+
       - name: Generate ikon & splash CoolCare
         run: npx @capacitor/assets generate --android --iconBackgroundColor '#ffffff' --iconBackgroundColorDark '#0b1220' --splashBackgroundColor '#ffffff' --splashBackgroundColorDark '#0b1220'
 

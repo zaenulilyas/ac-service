@@ -10,7 +10,7 @@ const PK_OPTIONS = ['0.5', '0.75', '1', '1.5', '2', '2.5', '3', '5', '10'];
 const STATUS_OPTIONS = ['OK', 'NOK'];
 // Kelas background item (Daftar Ruangan & panel admin) ngikut status pill
 const STATUS_BG = { ticket: 'st-rev', due: 'st-rev', done: 'st-done', prog: 'st-prog', uploading: '', todo: '' };
-const APP_VERSION = 'v69.7'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
+const APP_VERSION = 'v69.8'; // update berikutnya cukup naikin angka belakang: v69.2, v69.3, dst
 // Akun bootstrap offline (fallback kalau backend belum diset). Akun asli di tab Users spreadsheet.
 const USERS = [
   { user: 'admin', pass: 'admin123', name: 'Admin', role: 'admin' }
